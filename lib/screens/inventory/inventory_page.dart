@@ -1,50 +1,24 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/core.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Data Models
-// ─────────────────────────────────────────────────────────────────────────────
-
-class InventoryItem {
-  final String id; // Product ID, e.g. P000, P001, P999
-  final String name;
-  final String category;
-  final String barcode;
-  final String unit;
-  double stock;
-  final double reorderLevel;
-  final double purchaseRate;
-  final double sellingRate;
-  final String description;
-  Uint8List? imageBytes;
-  String? imageName;
-
-  InventoryItem({
-    required this.id,
-    required this.name,
-    required this.category,
-    required this.barcode,
-    required this.unit,
-    required this.stock,
-    required this.reorderLevel,
-    required this.purchaseRate,
-    required this.sellingRate,
-    required this.description,
-    this.imageBytes,
-    this.imageName,
-  });
-
-  double get stockValue => stock * sellingRate;
-}
+import '../../core/models/product.dart';
+import '../../core/services/product_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // InventoryPage Widget
 // ─────────────────────────────────────────────────────────────────────────────
 
 class InventoryPage extends StatefulWidget {
-  const InventoryPage({super.key});
+  final bool autoShowAddItemForm;
+  final String initialStockStatusFilter;
+
+  const InventoryPage({
+    super.key,
+    this.autoShowAddItemForm = false,
+    this.initialStockStatusFilter = 'ALL',
+  });
 
   @override
   State<InventoryPage> createState() => _InventoryPageState();
@@ -72,56 +46,11 @@ class _InventoryPageState extends State<InventoryPage> {
 
 
   // ── Inventory Items State ──────────────────────────────────────────────────
-  final List<InventoryItem> _items = [
-    InventoryItem(
-      id: 'P000',
-      name: 'Black Forest Cake',
-      category: 'Cakes',
-      barcode: '8901234567893',
-      unit: 'pcs',
-      stock: 3,
-      reorderLevel: 5,
-      purchaseRate: 900,
-      sellingRate: 1250,
-      description: 'Indian rupee 1,250 rich chocolate cake with cherries.',
-    ),
-    InventoryItem(
-      id: 'P001',
-      name: 'Chocolate Pastry',
-      category: 'Pastries',
-      barcode: '8901234567897',
-      unit: 'pcs',
-      stock: 31,
-      reorderLevel: 10,
-      purchaseRate: 40,
-      sellingRate: 60,
-      description: 'Soft slice of chocolate pastry.',
-    ),
-    InventoryItem(
-      id: 'P002',
-      name: 'White Bread',
-      category: 'Bread',
-      barcode: '8901234567898',
-      unit: 'pcs',
-      stock: 0, // 0 stock to reflect Out of Stock perfectly
-      reorderLevel: 40,
-      purchaseRate: 30,
-      sellingRate: 40,
-      description: 'Daily fresh white bread packet.',
-    ),
-    InventoryItem(
-      id: 'P003',
-      name: 'Milk Bread',
-      category: 'Bread',
-      barcode: '8901234567899',
-      unit: 'pcs',
-      stock: 50,
-      reorderLevel: 55,
-      purchaseRate: 33,
-      sellingRate: 45,
-      description: 'Sweet milk bread loaf.',
-    ),
-  ];
+  List<InventoryItem> _items = [];
+  String? _attachedImageUrl;
+  String? _editingOriginalProductId; // Track original ID during edits
+  late final Stream<List<InventoryItem>> _inventoryStream;
+  StreamSubscription<List<String>>? _categoriesSubscription;
 
   // ── ADD CATEGORY Form State ────────────────────────────────────────────────
   bool _showAddCategoryForm = false;
@@ -137,6 +66,7 @@ class _InventoryPageState extends State<InventoryPage> {
   final _purchaseRateController = TextEditingController();
   final _sellingRateController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _imageUrlController = TextEditingController();
 
   String _selectedItemCategory = 'Cakes';
   String _selectedItemUnit = 'pcs';
@@ -144,14 +74,57 @@ class _InventoryPageState extends State<InventoryPage> {
   Uint8List? _attachedImageBytes;
   String? _attachedImageName;
 
+  bool _doesProductIdExist(String id) {
+    if (id.isEmpty) return false;
+    if (_editingOriginalProductId != null && id.toLowerCase() == _editingOriginalProductId!.toLowerCase()) {
+      return false;
+    }
+    return _items.any((item) => item.id.toLowerCase() == id.toLowerCase());
+  }
+
   @override
   void initState() {
     super.initState();
+    _selectedStockStatusFilter = widget.initialStockStatusFilter;
+    _inventoryStream = ProductService().getInventoryItemsStream();
+    
+    // Listen to custom categories in Firestore
+    _categoriesSubscription = ProductService().getCustomCategoriesStream().listen((customCats) {
+      if (mounted) {
+        setState(() {
+          // Reset categories to default ones first to avoid duplicates
+          _categories.clear();
+          _categories.addAll([
+            'All',
+            'Cakes',
+            'Pastries',
+            'Bread',
+            'Chips',
+            'Dry Fruits',
+            'Biscuits',
+            'Beverages',
+            'Packaging',
+          ]);
+          // Add custom ones if they don't exist
+          for (final cat in customCats) {
+            final exists = _categories.any((c) => c.toLowerCase() == cat.toLowerCase());
+            if (!exists) {
+              _categories.add(cat);
+            }
+          }
+        });
+      }
+    });
+
     _resetProductId();
+    if (widget.autoShowAddItemForm) {
+      _showAddItemForm = true;
+    }
   }
 
   @override
   void dispose() {
+    _categoriesSubscription?.cancel();
     _scrollController.dispose();
     _newCategoryController.dispose();
     _productIdController.dispose();
@@ -162,6 +135,7 @@ class _InventoryPageState extends State<InventoryPage> {
     _purchaseRateController.dispose();
     _sellingRateController.dispose();
     _descriptionController.dispose();
+    _imageUrlController.dispose();
     super.dispose();
   }
 
@@ -271,27 +245,32 @@ class _InventoryPageState extends State<InventoryPage> {
     _showSuccessSnackbar('Simulated product photo loaded!');
   }
 
-  // ── Action Handlers ────────────────────────────────────────────────────────
-  void _saveCategory() {
+  Future<void> _saveCategory() async {
     final newCat = _newCategoryController.text.trim();
     if (newCat.isEmpty) {
       _showErrorSnackbar('Please enter a Category Name');
       return;
     }
     final formattedCat = newCat[0].toUpperCase() + newCat.substring(1);
-    setState(() {
-      final alreadyExists = _categories.any((c) => c.toLowerCase() == formattedCat.toLowerCase());
-      if (!alreadyExists) {
-        _categories.add(formattedCat);
-      }
-      _selectedCategoryFilter = formattedCat;
-      _newCategoryController.clear();
-      _showAddCategoryForm = false;
-    });
-    _showSuccessSnackbar('Category "$formattedCat" created and selected!');
+    
+    try {
+      await ProductService().saveCategory(formattedCat);
+      setState(() {
+        final alreadyExists = _categories.any((c) => c.toLowerCase() == formattedCat.toLowerCase());
+        if (!alreadyExists) {
+          _categories.add(formattedCat);
+        }
+        _selectedCategoryFilter = formattedCat;
+        _newCategoryController.clear();
+        _showAddCategoryForm = false;
+      });
+      _showSuccessSnackbar('Category "$formattedCat" created and selected!');
+    } catch (e) {
+      _showErrorSnackbar('Failed to save category to database: $e');
+    }
   }
 
-  void _saveProduct() {
+  Future<void> _saveProduct() async {
     final id = _productIdController.text.trim().isEmpty ? 'P000' : _productIdController.text.trim();
     final name = _itemNameController.text.trim();
     final barcode = _barcodeController.text.trim().isEmpty ? '8900000000000' : _barcodeController.text.trim();
@@ -306,8 +285,33 @@ class _InventoryPageState extends State<InventoryPage> {
       return;
     }
 
-    setState(() {
-      // Create new inventory item
+    if (_doesProductIdExist(id)) {
+      _showErrorSnackbar('Cannot save. Product ID "$id" already exists!');
+      return;
+    }
+
+    // Show a loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      String? imageUrl = _imageUrlController.text.trim();
+      if (imageUrl.isEmpty) {
+        imageUrl = _attachedImageUrl;
+      }
+      if (_attachedImageBytes != null && _attachedImageName != null) {
+        final uploadedUrl = await ProductService().uploadProductImage(
+          '${id}_${DateTime.now().millisecondsSinceEpoch}_$_attachedImageName',
+          _attachedImageBytes!,
+        );
+        if (uploadedUrl != null) {
+          imageUrl = uploadedUrl;
+        }
+      }
+
       final newItem = InventoryItem(
         id: id,
         name: name,
@@ -319,30 +323,37 @@ class _InventoryPageState extends State<InventoryPage> {
         purchaseRate: purchaseVal,
         sellingRate: sellingVal,
         description: desc,
-        imageBytes: _attachedImageBytes,
+        imageUrl: imageUrl,
         imageName: _attachedImageName,
       );
 
-      // Add to item list
-      _items.add(newItem);
+      await ProductService().saveProduct(newItem);
 
-      // Reset fields
-      _itemNameController.clear();
-      _barcodeController.clear();
-      _stockController.clear();
-      _reorderController.clear();
-      _purchaseRateController.clear();
-      _sellingRateController.clear();
-      _descriptionController.clear();
-      _attachedImageBytes = null;
-      _attachedImageName = null;
-      _showAddItemForm = false;
+      // Close the loading dialog
+      if (mounted) Navigator.of(context).pop();
 
-      // Update ID counter suggestion
-      _resetProductId();
-    });
+      setState(() {
+        _itemNameController.clear();
+        _barcodeController.clear();
+        _stockController.clear();
+        _reorderController.clear();
+        _purchaseRateController.clear();
+        _sellingRateController.clear();
+        _descriptionController.clear();
+        _imageUrlController.clear();
+        _attachedImageBytes = null;
+        _attachedImageName = null;
+        _attachedImageUrl = null;
+        _editingOriginalProductId = null;
+        _showAddItemForm = false;
+        _resetProductId();
+      });
 
-    _showSuccessSnackbar('Product "$name" saved under ID: $id');
+      _showSuccessSnackbar('Product "$name" saved successfully!');
+    } catch (e) {
+      if (mounted) Navigator.of(context).pop();
+      _showErrorSnackbar('Failed to save product: $e');
+    }
   }
 
   void _showSuccessSnackbar(String text) {
@@ -378,72 +389,95 @@ class _InventoryPageState extends State<InventoryPage> {
   // ── Build Method ───────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final screenW = MediaQuery.sizeOf(context).width;
+    return StreamBuilder<List<InventoryItem>>(
+      stream: _inventoryStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(child: Text('Error loading inventory: ${snapshot.error}')),
+          );
+        }
 
-    // Filter Items
-    final filteredItems = _items.where((item) {
-      // 1. Search Query
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        final matches = item.name.toLowerCase().contains(query) ||
-            item.category.toLowerCase().contains(query) ||
-            item.barcode.contains(query) ||
-            item.id.toLowerCase().contains(query);
-        if (!matches) return false;
-      }
+        _items = snapshot.data ?? [];
 
-      // 2. Category Filter
-      if (_selectedCategoryFilter != 'All') {
-        final cat = _selectedCategoryFilter.toLowerCase();
-        final matches = item.category.toLowerCase().contains(cat) ||
-            cat.contains(item.category.toLowerCase());
-        if (!matches) return false;
-      }
+        // Auto-allocate next unused sequential ID once stream data is loaded
+        if (_showAddItemForm &&
+            (_productIdController.text.isEmpty || _productIdController.text == 'P000') &&
+            _editingOriginalProductId == null) {
+          _resetProductId();
+        }
 
-      // 4. Stock status summary card filter
-      if (_selectedStockStatusFilter == 'LOW_STOCK') {
-        final isLowStock = item.stock > 0 && item.stock <= item.reorderLevel;
-        if (!isLowStock) return false;
-      } else if (_selectedStockStatusFilter == 'OUT_OF_STOCK') {
-        final isOutOfStock = item.stock == 0;
-        if (!isOutOfStock) return false;
-      }
+        final isIdDuplicate = _doesProductIdExist(_productIdController.text.trim());
 
-      return true;
-    }).toList();
+        // Filter Items
+        final filteredItems = _items.where((item) {
+          // 1. Search Query
+          if (_searchQuery.isNotEmpty) {
+            final query = _searchQuery.toLowerCase();
+            final matches = item.name.toLowerCase().contains(query) ||
+                item.category.toLowerCase().contains(query) ||
+                item.barcode.contains(query) ||
+                item.id.toLowerCase().contains(query);
+            if (!matches) return false;
+          }
 
-    final isDesktop = screenW > 768;
+          // 2. Category Filter
+          if (_selectedCategoryFilter != 'All') {
+            final cat = _selectedCategoryFilter.toLowerCase();
+            final matches = item.category.toLowerCase().contains(cat) ||
+                cat.contains(item.category.toLowerCase());
+            if (!matches) return false;
+          }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        leadingWidth: 56,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 22),
-          tooltip: 'Back to Home',
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text('INVENTORY', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings, size: 26),
-            tooltip: 'Settings',
-            onPressed: () {},
+          // 4. Stock status summary card filter
+          if (_selectedStockStatusFilter == 'LOW_STOCK') {
+            final isLowStock = item.stock > 0 && item.stock <= item.reorderLevel;
+            if (!isLowStock) return false;
+          } else if (_selectedStockStatusFilter == 'OUT_OF_STOCK') {
+            final isOutOfStock = item.stock == 0;
+            if (!isOutOfStock) return false;
+          }
+
+          return true;
+        }).toList();
+
+        return Scaffold(
+          backgroundColor: Colors.white,
+          appBar: AppBar(
+            leadingWidth: 56,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new, size: 22),
+              tooltip: 'Back to Home',
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: const Text('INVENTORY', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            centerTitle: true,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.settings, size: 26),
+                tooltip: 'Settings',
+                onPressed: () {},
+              ),
+              const SizedBox(width: 8),
+            ],
+            bottom: const PreferredSize(
+              preferredSize: Size.fromHeight(1),
+              child: Divider(height: 1, thickness: 1, color: AppTheme.divider),
+            ),
           ),
-          const SizedBox(width: 8),
-        ],
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, thickness: 1, color: AppTheme.divider),
-        ),
-      ),
-      body: SingleChildScrollView(
-        controller: _scrollController,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+          body: SingleChildScrollView(
+            controller: _scrollController,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
             // ── 1. Search Bar ────────────────────────────────────────────────
             Row(
               children: [
@@ -458,7 +492,7 @@ class _InventoryPageState extends State<InventoryPage> {
                       onChanged: (val) => setState(() => _searchQuery = val),
                       style: const TextStyle(fontSize: 15),
                       decoration: InputDecoration(
-                        hintText: 'Search Item / Barcode',
+                        hintText: 'Search Name, Barcode, or Product ID',
                         hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                         prefixIcon: Icon(Icons.search, color: Colors.grey[500], size: 22),
                         border: InputBorder.none,
@@ -681,8 +715,16 @@ class _InventoryPageState extends State<InventoryPage> {
                             border: Border.all(color: Colors.grey[300]!),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: item.imageBytes != null
-                              ? const Icon(Icons.image, color: AppTheme.primary, size: 28)
+                          child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    item.imageUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                        const Icon(Icons.broken_image, color: Colors.red),
+                                  ),
+                                )
                               : const Center(
                                   child: Text(
                                     '[ PIC ]',
@@ -749,10 +791,12 @@ class _InventoryPageState extends State<InventoryPage> {
                                       _descriptionController.text = item.description;
                                       _selectedItemCategory = item.category;
                                       _selectedItemUnit = item.unit;
-                                      _attachedImageBytes = item.imageBytes;
+                                      _attachedImageBytes = null;
                                       _attachedImageName = item.imageName;
+                                      _attachedImageUrl = item.imageUrl;
+                                      _imageUrlController.text = item.imageUrl ?? '';
+                                      _editingOriginalProductId = item.id;
 
-                                      _items.remove(item);
                                       _showAddItemForm = true;
                                     });
                                     _scrollToBottom(true);
@@ -764,11 +808,32 @@ class _InventoryPageState extends State<InventoryPage> {
                                 ),
                                 const SizedBox(width: 6),
                                 InkWell(
-                                  onTap: () {
-                                    setState(() {
-                                      _items.remove(item);
-                                    });
-                                    _showSuccessSnackbar('Item "${item.name}" deleted.');
+                                  onTap: () async {
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text('Delete Product'),
+                                        content: Text('Are you sure you want to delete ${item.name}?'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.of(context).pop(),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          ElevatedButton(
+                                            onPressed: () async {
+                                              Navigator.of(context).pop();
+                                              try {
+                                                await ProductService().deleteProduct(item.id);
+                                                _showSuccessSnackbar('Item "${item.name}" deleted.');
+                                              } catch (e) {
+                                                _showErrorSnackbar('Failed to delete item: $e');
+                                              }
+                                            },
+                                            child: const Text('Delete'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
                                   },
                                   child: const Padding(
                                     padding: EdgeInsets.all(4.0),
@@ -953,10 +1018,16 @@ class _InventoryPageState extends State<InventoryPage> {
                       const SizedBox(height: 6),
                       TextField(
                         controller: _productIdController,
-                        decoration: const InputDecoration(
+                        onChanged: (val) {
+                          setState(() {});
+                        },
+                        decoration: InputDecoration(
                           hintText: 'Enter custom Product ID (e.g. P999)',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          border: const OutlineInputBorder(),
+                          errorText: isIdDuplicate
+                              ? 'This Product ID already exists!'
+                              : null,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -972,6 +1043,7 @@ class _InventoryPageState extends State<InventoryPage> {
                                 const SizedBox(height: 6),
                                 TextField(
                                   controller: _itemNameController,
+                                  enabled: !isIdDuplicate,
                                   decoration: const InputDecoration(
                                     hintText: 'Enter item name',
                                     border: OutlineInputBorder(),
@@ -1004,13 +1076,15 @@ class _InventoryPageState extends State<InventoryPage> {
                                           child: Text(c),
                                         );
                                       }).toList(),
-                                      onChanged: (val) {
-                                        if (val != null) {
-                                          setState(() {
-                                            _selectedItemCategory = val;
-                                          });
-                                        }
-                                      },
+                                      onChanged: isIdDuplicate
+                                          ? null
+                                          : (val) {
+                                              if (val != null) {
+                                                setState(() {
+                                                  _selectedItemCategory = val;
+                                                });
+                                              }
+                                            },
                                     ),
                                   ),
                                 ),
@@ -1032,6 +1106,7 @@ class _InventoryPageState extends State<InventoryPage> {
                                 const SizedBox(height: 6),
                                 TextField(
                                   controller: _barcodeController,
+                                  enabled: !isIdDuplicate,
                                   decoration: InputDecoration(
                                     hintText: 'Enter SKU / Scan Barcode',
                                     border: const OutlineInputBorder(),
@@ -1065,13 +1140,15 @@ class _InventoryPageState extends State<InventoryPage> {
                                           child: Text(u),
                                         );
                                       }).toList(),
-                                      onChanged: (val) {
-                                        if (val != null) {
-                                          setState(() {
-                                            _selectedItemUnit = val;
-                                          });
-                                        }
-                                      },
+                                      onChanged: isIdDuplicate
+                                          ? null
+                                          : (val) {
+                                              if (val != null) {
+                                                setState(() {
+                                                  _selectedItemUnit = val;
+                                                });
+                                              }
+                                            },
                                     ),
                                   ),
                                 ),
@@ -1093,6 +1170,7 @@ class _InventoryPageState extends State<InventoryPage> {
                                 const SizedBox(height: 6),
                                 TextField(
                                   controller: _stockController,
+                                  enabled: !isIdDuplicate,
                                   keyboardType: TextInputType.number,
                                   decoration: InputDecoration(
                                     hintText: 'Enter Stock Quantity',
@@ -1113,6 +1191,7 @@ class _InventoryPageState extends State<InventoryPage> {
                                 const SizedBox(height: 6),
                                 TextField(
                                   controller: _reorderController,
+                                  enabled: !isIdDuplicate,
                                   keyboardType: TextInputType.number,
                                   decoration: const InputDecoration(
                                     hintText: 'Enter reorder level',
@@ -1138,6 +1217,7 @@ class _InventoryPageState extends State<InventoryPage> {
                                 const SizedBox(height: 6),
                                 TextField(
                                   controller: _purchaseRateController,
+                                  enabled: !isIdDuplicate,
                                   keyboardType: TextInputType.number,
                                   decoration: const InputDecoration(
                                     hintText: 'Enter purchase rate',
@@ -1157,6 +1237,7 @@ class _InventoryPageState extends State<InventoryPage> {
                                 const SizedBox(height: 6),
                                 TextField(
                                   controller: _sellingRateController,
+                                  enabled: !isIdDuplicate,
                                   keyboardType: TextInputType.number,
                                   decoration: const InputDecoration(
                                     hintText: 'Enter Selling Rate',
@@ -1176,6 +1257,7 @@ class _InventoryPageState extends State<InventoryPage> {
                       const SizedBox(height: 6),
                       TextField(
                         controller: _descriptionController,
+                        enabled: !isIdDuplicate,
                         maxLines: 2,
                         decoration: const InputDecoration(
                           hintText: 'Enter description',
@@ -1185,10 +1267,25 @@ class _InventoryPageState extends State<InventoryPage> {
                       ),
                       const SizedBox(height: 14),
 
-                      // Add Image Box
-                      const Text('Add Image', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      // Image Web URL Input
+                      const Text('Image Web URL (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 6),
-                      _buildAddImageBox(),
+                      TextField(
+                        controller: _imageUrlController,
+                        enabled: !isIdDuplicate,
+                        decoration: const InputDecoration(
+                          hintText: 'Paste direct image URL (e.g. from PostImages/Imgur)',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          suffixIcon: Icon(Icons.link, color: Colors.grey),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Add Image Box
+                      const Text('Or Upload/Simulate Image (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      _buildAddImageBox(isEnabled: !isIdDuplicate),
                       const SizedBox(height: 18),
 
                       // Reset & Save buttons
@@ -1211,8 +1308,11 @@ class _InventoryPageState extends State<InventoryPage> {
                                   _purchaseRateController.clear();
                                   _sellingRateController.clear();
                                   _descriptionController.clear();
+                                  _imageUrlController.clear();
+                                  _attachedImageUrl = null;
                                   _attachedImageBytes = null;
                                   _attachedImageName = null;
+                                  _editingOriginalProductId = null;
                                 });
                                 _showErrorSnackbar('Form values reset.');
                               },
@@ -1223,13 +1323,17 @@ class _InventoryPageState extends State<InventoryPage> {
                           Expanded(
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue,
+                                backgroundColor: isIdDuplicate ? Colors.grey : Colors.blue,
                                 foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                 minimumSize: const Size(0, 48),
                                 elevation: 0,
                               ),
-                              onPressed: _saveProduct,
+                              onPressed: isIdDuplicate
+                                  ? () {
+                                      _showErrorSnackbar('Cannot save. Product ID already exists!');
+                                    }
+                                  : _saveProduct,
                               child: const Text('SAVE ITEM', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                             ),
                           ),
@@ -1244,103 +1348,111 @@ class _InventoryPageState extends State<InventoryPage> {
         ),
       ),
     );
+      },
+    );
   }
 
   // ── Component: Add Image attachment box ──
-  Widget _buildAddImageBox() {
+  Widget _buildAddImageBox({bool isEnabled = true}) {
     final hasImage = _attachedImageBytes != null;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: isEnabled ? Colors.grey[50] : Colors.grey[200],
         border: Border.all(
-          color: hasImage ? AppTheme.primary : Colors.grey[300]!,
+          color: hasImage && isEnabled ? AppTheme.primary : Colors.grey[300]!,
           width: 1.5,
         ),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Column(
-        children: [
-          if (!hasImage)
-            GestureDetector(
-              onTap: _showImageSourceBottomSheet,
-              child: Container(
-                width: double.infinity,
-                height: 48,
-                color: Colors.grey[200],
-                alignment: Alignment.center,
-                child: Text(
-                  'Add an image',
-                  style: TextStyle(color: Colors.grey[700], fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-              ),
-            )
-          else
-            Row(
-              children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(6),
-                    color: Colors.grey[300],
-                  ),
-                  child: const Icon(Icons.image, color: AppTheme.primary),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _attachedImageName ?? 'image.png',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textDark),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const Text('Attached', style: TextStyle(fontSize: 11, color: AppTheme.positive)),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_forever, color: Colors.red),
-                  onPressed: () {
-                    setState(() {
-                      _attachedImageBytes = null;
-                      _attachedImageName = null;
-                    });
-                  },
-                ),
-              ],
-            ),
-          const SizedBox(height: 8),
-          // Simulator helper controls
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+      child: IgnorePointer(
+        ignoring: !isEnabled,
+        child: Opacity(
+          opacity: isEnabled ? 1.0 : 0.5,
+          child: Column(
             children: [
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  minimumSize: Size.zero,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              if (!hasImage)
+                GestureDetector(
+                  onTap: _showImageSourceBottomSheet,
+                  child: Container(
+                    width: double.infinity,
+                    height: 48,
+                    color: Colors.grey[200],
+                    alignment: Alignment.center,
+                    child: Text(
+                      'Add an image',
+                      style: TextStyle(color: Colors.grey[700], fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                )
+              else
+                Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        color: Colors.grey[300],
+                      ),
+                      child: const Icon(Icons.image, color: AppTheme.primary),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _attachedImageName ?? 'image.png',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textDark),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const Text('Attached', style: TextStyle(fontSize: 11, color: AppTheme.positive)),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_forever, color: Colors.red),
+                      onPressed: () {
+                        setState(() {
+                          _attachedImageBytes = null;
+                          _attachedImageName = null;
+                        });
+                      },
+                    ),
+                  ],
                 ),
-                onPressed: () => _simulateImageCapture('simulated_camera_photo.jpg'),
-                child: const Text('Simulate Camera Capture', style: TextStyle(fontSize: 10)),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  minimumSize: Size.zero,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                ),
-                onPressed: () => _simulateImageCapture('simulated_gallery_photo.png'),
-                child: const Text('Simulate Gallery Import', style: TextStyle(fontSize: 10)),
+              const SizedBox(height: 8),
+              // Simulator helper controls
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: Size.zero,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    ),
+                    onPressed: () => _simulateImageCapture('simulated_camera_photo.jpg'),
+                    child: const Text('Simulate Camera Capture', style: TextStyle(fontSize: 10)),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: Size.zero,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    ),
+                    onPressed: () => _simulateImageCapture('simulated_gallery_photo.png'),
+                    child: const Text('Simulate Gallery Import', style: TextStyle(fontSize: 10)),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

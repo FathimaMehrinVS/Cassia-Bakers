@@ -9,10 +9,12 @@ class QuickActionButton extends StatelessWidget {
   const QuickActionButton({
     super.key,
     required this.label,
+    required this.icon,
     this.onTap,
   });
 
   final String label;
+  final IconData icon;
   final VoidCallback? onTap;
 
   @override
@@ -26,17 +28,29 @@ class QuickActionButton extends StatelessWidget {
         splashColor  : AppTheme.primary.withValues(alpha: 0.08),
         child: Container(
           // Fill parent width (controlled by LayoutBuilder in parent)
-          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+          padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 8),
           alignment: Alignment.center,
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontSize        : 14,
-                  fontWeight      : FontWeight.w600,
-                  color           : AppTheme.textDark,
-                  letterSpacing   : 0.1,
-                ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 28,
+                color: AppTheme.primary,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontSize        : 16,
+                      fontWeight      : FontWeight.w600,
+                      color           : AppTheme.textDark,
+                      letterSpacing   : 0.1,
+                    ),
+              ),
+            ],
           ),
         ),
       ),

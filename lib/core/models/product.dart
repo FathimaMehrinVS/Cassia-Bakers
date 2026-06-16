@@ -30,6 +30,7 @@ class Product {
   final String category;
   final String barcode;
   final double gstRate; // e.g. 0.05 for 5%
+  final double stock;
   final List<ProductSizeOption> sizes;
 
   const Product({
@@ -38,6 +39,7 @@ class Product {
     required this.category,
     required this.barcode,
     required this.gstRate,
+    required this.stock,
     required this.sizes,
   });
 
@@ -48,21 +50,36 @@ class Product {
       'category': category,
       'barcode': barcode,
       'gstRate': gstRate,
+      'stock': stock,
       'sizes': sizes.map((s) => s.toMap()).toList(),
     };
   }
 
   factory Product.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
+    final sizesList = data['sizes'] as List?;
+    List<ProductSizeOption> parsedSizes = [];
+
+    if (sizesList != null && sizesList.isNotEmpty) {
+      parsedSizes = sizesList
+          .map((s) => ProductSizeOption.fromMap(Map<String, dynamic>.from(s)))
+          .toList();
+    } else {
+      final sellingRate = (data['sellingRate'] as num? ?? 0.0).toDouble();
+      final unit = data['unit'] as String? ?? 'pcs';
+      parsedSizes = [
+        ProductSizeOption(label: 'Standard ($unit)', price: sellingRate),
+      ];
+    }
+
     return Product(
       id: doc.id,
       name: data['name'] as String? ?? '',
       category: data['category'] as String? ?? '',
       barcode: data['barcode'] as String? ?? '',
       gstRate: (data['gstRate'] as num? ?? 0.0).toDouble(),
-      sizes: (data['sizes'] as List? ?? [])
-          .map((s) => ProductSizeOption.fromMap(Map<String, dynamic>.from(s)))
-          .toList(),
+      stock: (data['stock'] as num? ?? 0.0).toDouble(),
+      sizes: parsedSizes,
     );
   }
 }

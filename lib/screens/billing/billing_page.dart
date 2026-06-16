@@ -1,6 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../core/core.dart';
+import '../../core/models/product.dart';
+import '../../core/models/order.dart';
+import '../../core/services/product_service.dart';
+import '../../core/services/order_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom Barcode Icon Widget
@@ -38,34 +43,6 @@ class BarcodeIcon extends StatelessWidget {
 // Model Classes for Products and Cart Items
 // ─────────────────────────────────────────────────────────────────────────────
 
-class ProductSizeOption {
-  final String label;
-  final double price;
-
-  const ProductSizeOption({
-    required this.label,
-    required this.price,
-  });
-}
-
-class Product {
-  final String id;
-  final String name;
-  final String category;
-  final String barcode;
-  final double gstRate; // e.g. 0.05 for 5%
-  final List<ProductSizeOption> sizes;
-
-  const Product({
-    required this.id,
-    required this.name,
-    required this.category,
-    required this.barcode,
-    required this.gstRate,
-    required this.sizes,
-  });
-}
-
 class CartItem {
   final Product product;
   final ProductSizeOption selectedSize;
@@ -92,78 +69,8 @@ class BillingPage extends StatefulWidget {
 }
 
 class _BillingPageState extends State<BillingPage> {
-  // ── Mock Product Catalog ──────────────────────────────────────────────────
-  static const List<Product> _catalog = [
-    Product(
-      id: 'banana_chips',
-      name: 'Banana Chips',
-      category: 'Chips',
-      barcode: '8901234567890',
-      gstRate: 0.05,
-      sizes: [
-        ProductSizeOption(label: '100 gr', price: 70),
-        ProductSizeOption(label: '200 gr', price: 140),
-        ProductSizeOption(label: '500 gr', price: 350),
-      ],
-    ),
-    Product(
-      id: 'potato_chips',
-      name: 'Potato Chips',
-      category: 'Chips',
-      barcode: '8901234567891',
-      gstRate: 0.0,
-      sizes: [
-        ProductSizeOption(label: '500 gr', price: 90),
-        ProductSizeOption(label: '1 kg', price: 175),
-        ProductSizeOption(label: '2 kg', price: 340),
-      ],
-    ),
-    Product(
-      id: 'jackfruit_chips',
-      name: 'Jackfruit Chips',
-      category: 'Chips',
-      barcode: '8901234567892',
-      gstRate: 0.0,
-      sizes: [
-        ProductSizeOption(label: '250 gr', price: 190),
-        ProductSizeOption(label: '500 gr', price: 380),
-        ProductSizeOption(label: '1 kg', price: 760),
-      ],
-    ),
-    Product(
-      id: 'chocolate_cake',
-      name: 'Chocolate Cake',
-      category: 'Cake',
-      barcode: '8901234567893',
-      gstRate: 0.18,
-      sizes: [
-        ProductSizeOption(label: '0.5 kg', price: 400),
-        ProductSizeOption(label: '1 kg', price: 750),
-      ],
-    ),
-    Product(
-      id: 'vanilla_shake',
-      name: 'Vanilla Shake',
-      category: 'Shakes',
-      barcode: '8901234567894',
-      gstRate: 0.05,
-      sizes: [
-        ProductSizeOption(label: 'Regular', price: 120),
-        ProductSizeOption(label: 'Large', price: 180),
-      ],
-    ),
-    Product(
-      id: 'mango_juice',
-      name: 'Mango Juice',
-      category: 'Juice',
-      barcode: '8901234567895',
-      gstRate: 0.05,
-      sizes: [
-        ProductSizeOption(label: 'Regular', price: 100),
-        ProductSizeOption(label: 'Large', price: 150),
-      ],
-    ),
-  ];
+  List<Product> _catalog = [];
+  bool _isLoadingCatalog = true;
 
   // ── State Variables ────────────────────────────────────────────────────────
   final Map<String, CartItem> _cart = {}; // key: productId
@@ -175,6 +82,15 @@ class _BillingPageState extends State<BillingPage> {
 
   final TextEditingController _searchController = TextEditingController();
 
+  final List<String> _categories = [
+    'All',
+    'Chips',
+    'Cake',
+    'Shakes',
+    'Juice',
+  ];
+  StreamSubscription<List<String>>? _categoriesSubscription;
+
   // Temporary billing metadata matching mockup
   final String _billNo = '1025';
   final String _billDate = '27-05-2026';
@@ -183,12 +99,54 @@ class _BillingPageState extends State<BillingPage> {
   @override
   void initState() {
     super.initState();
-    // Do NOT pre-populate the cart so it starts empty.
-    // The cart sheet will only display once at least one item is added.
+    _loadCatalog();
+
+    // Listen to custom categories in Firestore
+    _categoriesSubscription = ProductService().getCustomCategoriesStream().listen((customCats) {
+      if (mounted) {
+        setState(() {
+          // Reset categories to default ones first to avoid duplicates
+          _categories.clear();
+          _categories.addAll([
+            'All',
+            'Chips',
+            'Cake',
+            'Shakes',
+            'Juice',
+          ]);
+          // Add custom ones if they don't exist
+          for (final cat in customCats) {
+            final exists = _categories.any((c) => c.toLowerCase() == cat.toLowerCase());
+            if (!exists) {
+              _categories.add(cat);
+            }
+          }
+        });
+      }
+    });
+  }
+
+  Future<void> _loadCatalog() async {
+    try {
+      final catalogData = await ProductService().getCatalog();
+      setState(() {
+        _catalog = catalogData;
+        _isLoadingCatalog = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingCatalog = false;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load product catalog: $e')),
+      );
+    }
   }
 
   @override
   void dispose() {
+    _categoriesSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -224,15 +182,31 @@ class _BillingPageState extends State<BillingPage> {
         final newQty = existingItem.quantity + delta;
         if (newQty <= 0) {
           _cart.remove(product.id);
+        } else if (newQty > product.stock) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Cannot add more. Only ${product.stock.toStringAsFixed(0)} left in stock!'),
+              backgroundColor: Colors.red[800],
+            ),
+          );
         } else {
           existingItem.quantity = newQty;
         }
       } else if (delta > 0) {
-        _cart[product.id] = CartItem(
-          product: product,
-          selectedSize: size,
-          quantity: delta,
-        );
+        if (product.stock <= 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Item is out of stock!'),
+              backgroundColor: Colors.red[800],
+            ),
+          );
+        } else {
+          _cart[product.id] = CartItem(
+            product: product,
+            selectedSize: size,
+            quantity: delta,
+          );
+        }
       }
     });
   }
@@ -251,8 +225,14 @@ class _BillingPageState extends State<BillingPage> {
   }
 
   void _addOrIncrementByBarcode(String barcode) {
+    String cleanBarcode = barcode.trim();
+    // Strip Code-39 start/stop asterisks if present
+    if (cleanBarcode.startsWith('*') && cleanBarcode.endsWith('*') && cleanBarcode.length > 2) {
+      cleanBarcode = cleanBarcode.substring(1, cleanBarcode.length - 1);
+    }
+    
     final product = _catalog.cast<Product?>().firstWhere(
-          (p) => p != null && p.barcode == barcode,
+          (p) => p != null && (p.barcode == cleanBarcode || p.id.toLowerCase() == cleanBarcode.toLowerCase()),
           orElse: () => null,
         );
 
@@ -260,6 +240,13 @@ class _BillingPageState extends State<BillingPage> {
       // Use default size (second option if available, otherwise first)
       final defaultSize = product.sizes.length > 1 ? product.sizes[1] : product.sizes[0];
       _updateQuantity(product, defaultSize, 1);
+      
+      // Filter list to only show the scanned item in the interface
+      setState(() {
+        _searchQuery = cleanBarcode;
+        _searchController.text = cleanBarcode;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -415,8 +402,10 @@ class _BillingPageState extends State<BillingPage> {
     // Filter catalog items
     final filteredCatalog = _catalog.where((product) {
       final matchesCategory = _selectedCategory == 'All' || product.category == _selectedCategory;
-      final matchesSearch = product.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          product.barcode.contains(_searchQuery);
+      final query = _searchQuery.toLowerCase();
+      final matchesSearch = product.name.toLowerCase().contains(query) ||
+          product.barcode.toLowerCase().contains(query) ||
+          product.id.toLowerCase().contains(query);
       return matchesCategory && matchesSearch;
     }).toList();
 
@@ -469,7 +458,7 @@ class _BillingPageState extends State<BillingPage> {
                           onChanged: (val) => setState(() => _searchQuery = val),
                           style: const TextStyle(fontSize: 16, color: AppTheme.textDark),
                           decoration: InputDecoration(
-                            hintText: 'Item search/Barcode Number',
+                            hintText: 'Search Name, Barcode, or Product ID',
                             hintStyle: TextStyle(color: Colors.grey[600], fontSize: 15),
                             prefixIcon: Icon(Icons.search, color: Colors.grey[600], size: 24),
                             border: InputBorder.none,
@@ -504,13 +493,7 @@ class _BillingPageState extends State<BillingPage> {
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: [
-                    'All',
-                    'Chips',
-                    'Cake',
-                    'Shakes',
-                    'Juice',
-                  ].map((category) {
+                  children: _categories.map((category) {
                     final isSelected = _selectedCategory == category;
                     return Padding(
                       padding: const EdgeInsets.only(right: 10),
@@ -543,30 +526,32 @@ class _BillingPageState extends State<BillingPage> {
 
               // 3. Scrollable Catalog list
               Expanded(
-                child: filteredCatalog.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24.0),
-                          child: Text(
-                            'No items match your search.',
-                            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        itemCount: filteredCatalog.length,
-                        itemBuilder: (context, index) {
-                          final product = filteredCatalog[index];
-                          // Read active sizes / quantities from cart
-                          final cartItem = _cart[product.id];
-                          final selectedSize = cartItem?.selectedSize ??
-                              (product.sizes.length > 1 ? product.sizes[1] : product.sizes[0]);
-                          final quantity = cartItem?.quantity ?? 0;
+                child: _isLoadingCatalog
+                    ? const Center(child: CircularProgressIndicator())
+                    : filteredCatalog.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24.0),
+                              child: Text(
+                                'No items match your search.',
+                                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            itemCount: filteredCatalog.length,
+                            itemBuilder: (context, index) {
+                              final product = filteredCatalog[index];
+                              // Read active sizes / quantities from cart
+                              final cartItem = _cart[product.id];
+                              final selectedSize = cartItem?.selectedSize ??
+                                  (product.sizes.length > 1 ? product.sizes[1] : product.sizes[0]);
+                              final quantity = cartItem?.quantity ?? 0;
 
-                          return _buildCatalogItemCard(product, selectedSize, quantity);
-                        },
-                      ),
+                              return _buildCatalogItemCard(product, selectedSize, quantity);
+                            },
+                          ),
               ),
 
               // Leave layout space for the bottom expandable sheet
@@ -621,6 +606,8 @@ class _BillingPageState extends State<BillingPage> {
 
   // ── Component: Individual Catalog Product Card ─────────────────────────────
   Widget _buildCatalogItemCard(Product product, ProductSizeOption selectedSize, int quantity) {
+    final isOutOfStock = product.stock <= 0;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -635,7 +622,7 @@ class _BillingPageState extends State<BillingPage> {
             width: 54,
             height: 54,
             decoration: BoxDecoration(
-              color: const Color(0xFF8B5CF6), // Premium rounded-purple fill
+              color: isOutOfStock ? Colors.grey : const Color(0xFF8B5CF6), // Premium rounded-purple fill
               borderRadius: BorderRadius.circular(10),
             ),
             alignment: Alignment.center,
@@ -658,16 +645,18 @@ class _BillingPageState extends State<BillingPage> {
               children: [
                 Text(
                   product.name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.textDark,
+                    color: isOutOfStock ? Colors.grey[500] : AppTheme.textDark,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 6),
                 // Standard visual dropdown size selector (padded for ease of use)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     border: Border.all(color: Colors.grey[300]!),
@@ -675,13 +664,14 @@ class _BillingPageState extends State<BillingPage> {
                   ),
                   child: DropdownButton<ProductSizeOption>(
                     value: selectedSize,
+                    isExpanded: true,
                     isDense: true,
                     underline: const SizedBox(),
-                    icon: const Icon(Icons.arrow_drop_down, color: AppTheme.primary, size: 24),
-                    style: const TextStyle(
-                      fontSize: 14,
+                    icon: Icon(Icons.arrow_drop_down, color: isOutOfStock ? Colors.grey : AppTheme.primary, size: 20),
+                    style: TextStyle(
+                      fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.textDark,
+                      color: isOutOfStock ? Colors.grey : AppTheme.textDark,
                     ),
                     items: product.sizes.map((size) {
                       return DropdownMenuItem<ProductSizeOption>(
@@ -689,16 +679,18 @@ class _BillingPageState extends State<BillingPage> {
                         child: Text('${size.label} • ₹${size.price.toStringAsFixed(0)}'),
                       );
                     }).toList(),
-                    onChanged: (newSize) {
-                      if (newSize != null) {
-                        if (quantity > 0) {
-                          _changeItemSize(product, newSize);
-                        } else {
-                          // If quantity was 0, auto-add 1 with the selected size
-                          _updateQuantity(product, newSize, 1);
-                        }
-                      }
-                    },
+                    onChanged: isOutOfStock
+                        ? null
+                        : (newSize) {
+                            if (newSize != null) {
+                              if (quantity > 0) {
+                                _changeItemSize(product, newSize);
+                              } else {
+                                // If quantity was 0, auto-add 1 with the selected size
+                                _updateQuantity(product, newSize, 1);
+                              }
+                            }
+                          },
                   ),
                 ),
               ],
@@ -707,56 +699,82 @@ class _BillingPageState extends State<BillingPage> {
 
           const SizedBox(width: 10),
 
-          // 3. Accessible Quantity Selector Box: [ - | Qty | + ]
-          Container(
-            height: 38,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.grey[300]!, width: 1.5),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Decrement button (Large visual target)
-                InkWell(
-                  onTap: () => _updateQuantity(product, selectedSize, -1),
-                  child: Container(
-                    width: 36,
-                    height: double.infinity,
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.remove, size: 18, color: AppTheme.textDark),
-                  ),
-                ),
-                // Vertical divider
-                Container(width: 1.5, color: Colors.grey[300]),
-                // Quantity count text
+          // 3. Right Column: Stock Info & Quantity Selector Box
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Stock Info (OUT OF STOCK or Stock count)
+              if (isOutOfStock)
                 Container(
-                  width: 32,
-                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.red[50],
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.red[300]!),
+                  ),
                   child: Text(
-                    '$quantity',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textDark,
+                    'OUT OF STOCK',
+                    style: TextStyle(color: Colors.red[800], fontSize: 9, fontWeight: FontWeight.bold),
+                  ),
+                )
+              else
+                Text(
+                  'Stock: ${product.stock.toStringAsFixed(0)}',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              const SizedBox(height: 6),
+              Container(
+                height: 38,
+                decoration: BoxDecoration(
+                  color: isOutOfStock ? Colors.grey[200] : Colors.white,
+                  border: Border.all(color: Colors.grey[300]!, width: 1.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Decrement button (Large visual target)
+                    InkWell(
+                      onTap: isOutOfStock ? null : () => _updateQuantity(product, selectedSize, -1),
+                      child: Container(
+                        width: 36,
+                        height: double.infinity,
+                        alignment: Alignment.center,
+                        child: Icon(Icons.remove, size: 18, color: isOutOfStock ? Colors.grey : AppTheme.textDark),
+                      ),
                     ),
-                  ),
+                    // Vertical divider
+                    Container(width: 1.5, color: Colors.grey[300]),
+                    // Quantity count text
+                    Container(
+                      width: 32,
+                      alignment: Alignment.center,
+                      child: Text(
+                        '$quantity',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: isOutOfStock ? Colors.grey : AppTheme.textDark,
+                        ),
+                      ),
+                    ),
+                    // Vertical divider
+                    Container(width: 1.5, color: Colors.grey[300]),
+                    // Increment button (Large visual target)
+                    InkWell(
+                      onTap: isOutOfStock ? null : () => _updateQuantity(product, selectedSize, 1),
+                      child: Container(
+                        width: 36,
+                        height: double.infinity,
+                        alignment: Alignment.center,
+                        child: Icon(Icons.add, size: 18, color: isOutOfStock ? Colors.grey : AppTheme.textDark),
+                      ),
+                    ),
+                  ],
                 ),
-                // Vertical divider
-                Container(width: 1.5, color: Colors.grey[300]),
-                // Increment button (Large visual target)
-                InkWell(
-                  onTap: () => _updateQuantity(product, selectedSize, 1),
-                  child: Container(
-                    width: 36,
-                    height: double.infinity,
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.add, size: 18, color: AppTheme.textDark),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1072,19 +1090,66 @@ class _BillingPageState extends State<BillingPage> {
                     child: _buildReceiptActionButton(
                       label: 'Done',
                       color: const Color(0xFF007F80), // Teal
-                      onPressed: () {
-                        setState(() {
-                          _cart.clear();
-                          _discount = 0.0;
-                          _gstOverride = null;
-                          _isReceiptExpanded = false;
-                        });
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Order saved successfully!', style: TextStyle(fontSize: 15)),
-                            backgroundColor: AppTheme.primary,
-                          ),
+                      onPressed: () async {
+                        // Show loading indicator
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (context) => const Center(child: CircularProgressIndicator()),
                         );
+
+                        try {
+                          final List<CartItemData> orderItems = _cart.values.map((item) {
+                            return CartItemData(
+                              productId: item.product.id,
+                              name: item.product.name,
+                              selectedSize: item.selectedSize.label,
+                              quantity: item.quantity,
+                              price: item.selectedSize.price,
+                            );
+                          }).toList();
+
+                          final newOrder = OrderData(
+                            id: 'order_${DateTime.now().millisecondsSinceEpoch}',
+                            billNo: _billNo,
+                            date: DateTime.now(),
+                            subtotal: _subtotal,
+                            discount: _discount,
+                            gstTotal: _gstTotal,
+                            total: _total,
+                            paymentMethod: 'Cash',
+                            items: orderItems,
+                          );
+
+                          // Create order in Firestore (which atomically decrements stock)
+                          await OrderService().createOrder(newOrder);
+
+                          if (mounted) Navigator.of(context).pop(); // close loading indicator
+
+                          setState(() {
+                            _cart.clear();
+                            _discount = 0.0;
+                            _gstOverride = null;
+                            _isReceiptExpanded = false;
+                          });
+
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Order saved and stock updated successfully!', style: TextStyle(fontSize: 15)),
+                              backgroundColor: AppTheme.primary,
+                            ),
+                          );
+                        } catch (e) {
+                          if (mounted) Navigator.of(context).pop(); // close loading indicator
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Checkout failed: $e', style: const TextStyle(fontSize: 15)),
+                              backgroundColor: Colors.red[800],
+                            ),
+                          );
+                        }
                       },
                     ),
                   ),
@@ -1257,28 +1322,50 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
               spacing: 8,
               runSpacing: 8,
               alignment: WrapAlignment.center,
-              children: widget.catalog.take(3).map((product) {
-                return ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey[200],
-                    foregroundColor: AppTheme.textDark,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: BorderSide(color: Colors.grey[350]!),
+              children: [
+                ...widget.catalog.take(2).map((product) {
+                  return ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[200],
+                      foregroundColor: AppTheme.textDark,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: Colors.grey[350]!),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  ),
-                  onPressed: () {
-                    // Close dialog returning mock barcode
-                    Navigator.of(context).pop(product.barcode);
-                  },
-                  child: Text(
-                    'Simulate: ${product.name}',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                );
-              }).toList(),
+                    onPressed: () {
+                      Navigator.of(context).pop(product.barcode);
+                    },
+                    child: Text(
+                      'Sim Barcode: ${product.name}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  );
+                }),
+                ...widget.catalog.take(2).map((product) {
+                  return ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[50],
+                      foregroundColor: Colors.blue[800],
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: Colors.blue[200]!),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).pop(product.id);
+                    },
+                    child: Text(
+                      'Sim ID: ${product.id}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  );
+                }),
+              ],
             ),
           ],
         ),

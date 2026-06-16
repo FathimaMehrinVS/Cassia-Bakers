@@ -1,5 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/core.dart';
+import '../../core/services/order_service.dart';
+import '../../core/services/product_service.dart';
+import '../../core/services/customer_supplier_service.dart';
+import '../../core/models/order.dart';
+import '../../core/models/product.dart';
 import '../../widgets/home/home_widgets.dart';
 import '../billing/billing_page.dart';
 import '../supplier/supplier_page.dart';
@@ -269,9 +275,85 @@ class _HomePageState extends State<HomePage> {
 // _HomeBody – scrollable content area
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _HomeBody extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// _HomeBody – scrollable content area with real-time stats
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _HomeBody extends StatefulWidget {
   final ValueChanged<int> onTabSelect;
   const _HomeBody({required this.onTabSelect});
+
+  @override
+  State<_HomeBody> createState() => _HomeBodyState();
+}
+
+class _HomeBodyState extends State<_HomeBody> {
+  DateTime _selectedDate = DateTime.now();
+  late final Stream<List<OrderData>> _ordersStream;
+  late final Stream<List<InventoryItem>> _productsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _ordersStream = OrderService().getOrdersStream();
+    _productsStream = ProductService().getInventoryItemsStream();
+  }
+
+  bool _isSameDay(DateTime date1, DateTime date2) {
+    return date1.year == date2.year &&
+        date1.month == date2.month &&
+        date1.day == date2.day;
+  }
+
+  bool _isTransactionOnDay(String dateStr, DateTime targetDate) {
+    final cleanStr = dateStr.toLowerCase();
+    
+    // Format 1: 17 Jun 2026
+    final months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    final monthName = months[targetDate.month - 1];
+    final format1 = '${targetDate.day} $monthName ${targetDate.year}';
+    if (cleanStr.contains(format1)) return true;
+    
+    // Format 2: 17-06-2026 or 17-6-2026
+    final dayStr = targetDate.day.toString();
+    final dayStrPadded = targetDate.day.toString().padLeft(2, '0');
+    final monthStr = targetDate.month.toString();
+    final monthStrPadded = targetDate.month.toString().padLeft(2, '0');
+    final format2a = '$dayStrPadded-$monthStrPadded-${targetDate.year}';
+    final format2b = '$dayStr-$monthStr-${targetDate.year}';
+    if (cleanStr.contains(format2a) || cleanStr.contains(format2b)) return true;
+    
+    return false;
+  }
+
+  String _getFormattedDateAndDay(DateTime date) {
+    const weekdays = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday'
+    ];
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
+    ];
+    final weekdayStr = weekdays[date.weekday - 1];
+    final monthStr = months[date.month - 1];
+    return '$weekdayStr, ${date.day} $monthStr ${date.year}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -282,21 +364,40 @@ class _HomeBody extends StatelessWidget {
     final actions = [
       QuickActionItem(
         label: 'New Order',
+        icon: Icons.shopping_cart_outlined,
         onTap: () {
           Navigator.of(context).push(
             MaterialPageRoute(builder: (context) => const BillingPage()),
           );
         },
       ),
-      QuickActionItem(label: 'Add stock'),
-      QuickActionItem(label: 'Expenses'),
+      QuickActionItem(
+        label: 'Add stock',
+        icon: Icons.add_box_outlined,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const InventoryPage(autoShowAddItemForm: true),
+            ),
+          );
+        },
+      ),
+      QuickActionItem(
+        label: 'Expenses',
+        icon: Icons.payments_outlined,
+      ),
       QuickActionItem(
         label: 'Customers',
-        onTap: () => onTabSelect(1),
+        icon: Icons.people_outline,
+        onTap: () => widget.onTabSelect(1),
       ),
-      QuickActionItem(label: 'Reports'),
+      QuickActionItem(
+        label: 'Reports',
+        icon: Icons.analytics_outlined,
+      ),
       QuickActionItem(
         label: 'Inventory',
+        icon: Icons.inventory_2_outlined,
         onTap: () {
           Navigator.of(context).push(
             MaterialPageRoute(builder: (context) => const InventoryPage()),
@@ -305,63 +406,207 @@ class _HomeBody extends StatelessWidget {
       ),
     ];
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(hPad, 20, hPad, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. Greeting ───────────────────────────────────────────────────────
-          const HomeGreeting(
-            greeting : 'Good Morning 👋,',
-            userName : 'Admin',
-          ),
+    return StreamBuilder<List<OrderData>>(
+      stream: _ordersStream,
+      builder: (context, ordersSnapshot) {
+        return StreamBuilder<List<InventoryItem>>(
+          stream: _productsStream,
+          builder: (context, productsSnapshot) {
+            return ListenableBuilder(
+              listenable: CustomerSupplierService(),
+              builder: (context, _) {
+                final orders = ordersSnapshot.data ?? [];
+                final products = productsSnapshot.data ?? [];
+                final customers = CustomerSupplierService().customers;
+                final suppliers = CustomerSupplierService().suppliers;
 
-          const SizedBox(height: 20),
+                // 1. Calculate Today's Sales
+                final ordersOnSelectedDay = orders.where((o) => _isSameDay(o.date, _selectedDate)).toList();
+                final billingTotal = ordersOnSelectedDay.fold(0.0, (sum, o) => sum + o.total);
 
-          // 2. Today's Sales hero card ────────────────────────────────────────
-          const TodaysSalesCard(
-            amount : '₹28,450',
-            delta  : '+12.5 from yesterday',
-          ),
+                double customerDuesToday = 0.0;
+                for (final c in customers) {
+                  for (final tx in c.transactions) {
+                    if (_isTransactionOnDay(tx.date, _selectedDate) && !tx.isPayment) {
+                      customerDuesToday += tx.amount;
+                    }
+                  }
+                }
 
-          const SizedBox(height: 12),
+                double supplierDuesToday = 0.0;
+                for (final s in suppliers) {
+                  for (final tx in s.transactions) {
+                    if (_isTransactionOnDay(tx.date, _selectedDate) && !tx.isPayment) {
+                      supplierDuesToday += tx.amount;
+                    }
+                  }
+                }
 
-          // 3. Stats summary row (Pending Due | Today's Orders | Low Stock) ───
-          const _StatsSummaryRow(),
+                final todaySales = billingTotal - customerDuesToday - supplierDuesToday;
 
-          const SizedBox(height: 28),
+                // Calculate yesterday's sales for delta comparison
+                final yesterday = _selectedDate.subtract(const Duration(days: 1));
+                final ordersOnYesterday = orders.where((o) => _isSameDay(o.date, yesterday)).toList();
+                final billingTotalYesterday = ordersOnYesterday.fold(0.0, (sum, o) => sum + o.total);
 
-          // 4. Quick Actions grid ─────────────────────────────────────────────
-          QuickActionsSection(
-            actions   : actions,
-            onViewAll : () {
-              // TODO: navigate to all actions screen
-            },
-          ),
+                double customerDuesYesterday = 0.0;
+                for (final c in customers) {
+                  for (final tx in c.transactions) {
+                    if (_isTransactionOnDay(tx.date, yesterday) && !tx.isPayment) {
+                      customerDuesYesterday += tx.amount;
+                    }
+                  }
+                }
 
-          const SizedBox(height: 20),
-        ],
-      ),
+                double supplierDuesYesterday = 0.0;
+                for (final s in suppliers) {
+                  for (final tx in s.transactions) {
+                    if (_isTransactionOnDay(tx.date, yesterday) && !tx.isPayment) {
+                      supplierDuesYesterday += tx.amount;
+                    }
+                  }
+                }
+
+                final yesterdaySales = billingTotalYesterday - customerDuesYesterday - supplierDuesYesterday;
+                final diff = todaySales - yesterdaySales;
+                
+                double percentDiff = 0.0;
+                if (yesterdaySales != 0) {
+                  percentDiff = (diff / yesterdaySales) * 100;
+                } else if (todaySales != 0) {
+                  percentDiff = todaySales > 0 ? 100.0 : -100.0;
+                }
+
+                final String deltaText;
+                if (yesterdaySales == 0 && todaySales == 0) {
+                  deltaText = '0.0% from yesterday';
+                } else {
+                  final sign = percentDiff >= 0 ? '+' : '';
+                  deltaText = '$sign${percentDiff.toStringAsFixed(1)}% from yesterday';
+                }
+
+                // 2. Pending Due (total outstanding you need to get from customers and suppliers)
+                final totalCustomerDue = customers.fold(0.0, (sum, c) => sum + c.netDue);
+                final totalSupplierDue = suppliers.fold(0.0, (sum, s) => sum + s.netDue);
+                final pendingDue = totalCustomerDue + totalSupplierDue;
+
+                // 3. Today's orders count
+                final todayOrdersCount = ordersOnSelectedDay.length;
+
+                // 4. Out of stock items count (stock == 0)
+                final outOfStockCount = products.where((p) => p.stock == 0).length;
+
+                return SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(hPad, 20, hPad, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 1. Greeting
+                      const HomeGreeting(
+                        greeting: 'Good Morning 👋,',
+                        userName: 'Admin',
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _getFormattedDateAndDay(DateTime.now()),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // 2. Today's Sales Card
+                      TodaysSalesCard(
+                        amount: '₹${todaySales.toStringAsFixed(0)}',
+                        delta: deltaText,
+                        selectedDate: _selectedDate,
+                        onDateChanged: (newDate) {
+                          setState(() {
+                            _selectedDate = newDate;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      // 3. Stats Summary Row
+                      _StatsSummaryRow(
+                        pendingDue: pendingDue,
+                        todayOrders: todayOrdersCount,
+                        outOfStockCount: outOfStockCount,
+                        onOutOfStockTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const InventoryPage(
+                                initialStockStatusFilter: 'OUT_OF_STOCK',
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 28),
+
+                      // 4. Quick Actions
+                      QuickActionsSection(
+                        actions: actions,
+                        onViewAll: () {},
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _StatsSummaryRow – three stat cards in a row
+// _StatsSummaryRow – three dynamic stat cards in a row
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StatsSummaryRow extends StatelessWidget {
-  const _StatsSummaryRow();
+  const _StatsSummaryRow({
+    required this.pendingDue,
+    required this.todayOrders,
+    required this.outOfStockCount,
+    required this.onOutOfStockTap,
+  });
+
+  final double pendingDue;
+  final int todayOrders;
+  final int outOfStockCount;
+  final VoidCallback onOutOfStockTap;
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       children: [
-        StatSummaryCard(label: 'Pending Due',      value: '₹15,680'),
-        SizedBox(width: 10),
-        StatSummaryCard(label: "Today's orders",   value: '32'),
-        SizedBox(width: 10),
-        StatSummaryCard(label: 'Low stock items',  value: '7'),
+        StatSummaryCard(
+          label: 'Pending Due',
+          value: '₹${pendingDue.toStringAsFixed(0)}',
+          icon: Icons.account_balance_wallet_outlined,
+          iconColor: Colors.orange[800],
+        ),
+        const SizedBox(width: 10),
+        StatSummaryCard(
+          label: "Today's orders",
+          value: '$todayOrders',
+          icon: Icons.receipt_long_outlined,
+          iconColor: Colors.blue[800],
+        ),
+        const SizedBox(width: 10),
+        StatSummaryCard(
+          label: 'Out of stock',
+          value: '$outOfStockCount',
+          icon: Icons.warning_amber_rounded,
+          iconColor: Colors.red[800],
+          onTap: onOutOfStockTap,
+        ),
       ],
     );
   }

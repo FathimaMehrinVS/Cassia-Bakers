@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../models/product.dart';
@@ -43,8 +43,30 @@ class ProductService {
       final downloadUrl = await uploadTask.ref.getDownloadURL();
       return downloadUrl;
     } catch (e) {
-      print("Firebase Storage upload failed: $e");
+      debugPrint("Firebase Storage upload failed: $e");
       return null;
     }
   }
+
+  // 6. Custom Categories Collection
+  final CollectionReference _categoriesCollection =
+      FirebaseFirestore.instance.collection('categories');
+
+  // Stream of custom categories
+  Stream<List<String>> getCustomCategoriesStream() {
+    return _categoriesCollection.snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => doc.id).toList();
+    });
+  }
+
+  // Save a custom category
+  Future<void> saveCategory(String categoryName) async {
+    final name = categoryName.trim();
+    if (name.isEmpty) return;
+    await _categoriesCollection.doc(name).set({
+      'name': name,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
 }
+

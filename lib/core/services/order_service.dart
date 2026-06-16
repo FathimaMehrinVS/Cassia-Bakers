@@ -39,4 +39,11 @@ class OrderService {
     final query = await _ordersCollection.orderBy('date', descending: true).get();
     return query.docs.map((doc) => OrderData.fromFirestore(doc)).toList();
   }
+
+  // 3. Listen to all orders as a stream
+  Stream<List<OrderData>> getOrdersStream() {
+    return _ordersCollection.orderBy('date', descending: true).snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => OrderData.fromFirestore(doc)).toList();
+    });
+  }
 }

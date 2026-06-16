@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/core.dart';
 
 /// The greeting block shown at the top of the home screen.
 ///
@@ -26,11 +27,11 @@ class HomeGreeting extends StatelessWidget {
       children: [
         Text(
           greeting,
-          style: tt.bodyLarge?.copyWith(fontSize: 15, height: 1.4),
+          style: tt.bodyLarge?.copyWith(fontSize: 19, height: 1.4, color: AppTheme.textMid),
         ),
         Text(
           userName,
-          style: tt.titleLarge?.copyWith(fontSize: 18, fontWeight: FontWeight.w700),
+          style: tt.titleLarge?.copyWith(fontSize: 26, fontWeight: FontWeight.w700),
         ),
       ],
     );

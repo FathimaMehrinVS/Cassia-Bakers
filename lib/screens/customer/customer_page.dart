@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../core/core.dart';
+import '../../core/services/customer_supplier_service.dart';
 import 'customer_detail_page.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,43 +69,7 @@ class _CustomerPageState extends State<CustomerPage> {
   final ScrollController _scrollController = ScrollController();
 
   // ── Customer Directory State ───────────────────────────────────────────────
-  final List<CustomerData> _customers = [
-    CustomerData(
-      id: 'c000',
-      name: 'Rahul Sharma',
-      phone: '+91 98765 43210',
-      dateAdded: '10 Jun 2026',
-      transactions: [
-        CustomerDueTransaction(description: 'Initial Due (Order #1002)', date: '10 Jun 2026 at 11:32 AM', amount: 2500, isPayment: false),
-        CustomerDueTransaction(description: 'Cash Payment', date: '11 Jun 2026 at 11:32 AM', amount: 1000, isPayment: true),
-      ],
-    ),
-    CustomerData(
-      id: 'c001',
-      name: 'Priya Nair',
-      phone: '+91 87654 32109',
-      dateAdded: '12 Jun 2026',
-      transactions: [
-        CustomerDueTransaction(description: 'Initial Due (Order #1005)', date: '12 Jun 2026 at 11:32 AM', amount: 850, isPayment: false),
-      ],
-    ),
-    CustomerData(
-      id: 'c002',
-      name: 'Amit Patel',
-      phone: '+91 76543 21098',
-      dateAdded: '14 Jun 2026',
-      transactions: [
-        CustomerDueTransaction(description: 'Order #1012', date: '14 Jun 2026 at 11:32 AM', amount: 3200, isPayment: false),
-      ],
-    ),
-    CustomerData(
-      id: 'c003',
-      name: 'Sneha Rao',
-      phone: '+91 65432 10987',
-      dateAdded: '15 Jun 2026',
-      transactions: [],
-    ),
-  ];
+  List<CustomerData> get _customers => CustomerSupplierService().customers;
 
   // ── Add Customer Form State ────────────────────────────────────────────────
   bool _showAddCustomerForm = false;
@@ -168,6 +133,7 @@ class _CustomerPageState extends State<CustomerPage> {
       _showAddCustomerForm = false;
     });
 
+    CustomerSupplierService().notify();
     _showSuccessSnackbar('Customer "$name" added successfully!');
   }
 
@@ -280,6 +246,7 @@ class _CustomerPageState extends State<CustomerPage> {
                             builder: (context) => CustomerDetailPage(
                               customer: customer,
                               onChanged: () {
+                                CustomerSupplierService().notify();
                                 setState(() {});
                               },
                             ),

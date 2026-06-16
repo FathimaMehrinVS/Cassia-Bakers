@@ -11,38 +11,63 @@ class StatSummaryCard extends StatelessWidget {
     super.key,
     required this.label,
     required this.value,
+    this.onTap,
+    this.icon,
+    this.iconColor,
   });
 
   final String label;
   final String value;
+  final VoidCallback? onTap;
+  final IconData? icon;
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
       child: Card(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.textMid,
-                      height: 1.3,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textMid,
+                              height: 1.3,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
                     ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textDark,
-                    ),
-              ),
-            ],
+                    if (icon != null)
+                      Icon(
+                        icon,
+                        size: 24,
+                        color: iconColor ?? AppTheme.primary,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.textDark,
+                      ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

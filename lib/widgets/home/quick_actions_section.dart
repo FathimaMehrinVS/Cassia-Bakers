@@ -4,8 +4,9 @@ import 'quick_action_button.dart';
 
 /// Model for a single quick-action entry.
 class QuickActionItem {
-  const QuickActionItem({required this.label, this.onTap});
+  const QuickActionItem({required this.label, required this.icon, this.onTap});
   final String label;
+  final IconData icon;
   final VoidCallback? onTap;
 }
 
@@ -34,7 +35,7 @@ class QuickActionsSection extends StatelessWidget {
               'Quick Actions',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
-                    fontSize: 17,
+                    fontSize: 19,
                   ),
             ),
             GestureDetector(
@@ -44,6 +45,7 @@ class QuickActionsSection extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color      : AppTheme.textDark,
                       fontWeight : FontWeight.w600,
+                      fontSize   : 16,
                     ),
               ),
             ),
@@ -72,6 +74,7 @@ class QuickActionsSection extends StatelessWidget {
                         width  : itemWidth,
                         child  : QuickActionButton(
                           label : rowItems[j].label,
+                          icon  : rowItems[j].icon,
                           onTap : rowItems[j].onTap,
                         ),
                       ),
