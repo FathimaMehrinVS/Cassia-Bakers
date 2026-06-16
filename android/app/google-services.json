@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "728491953584",
+    "project_id": "cassia-bakers-32a93",
+    "storage_bucket": "cassia-bakers-32a93.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:728491953584:android:147422518d1a3d5fed9a75",
+        "android_client_info": {
+          "package_name": "com.cassiabakery.cassia_bakery_erp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyABgbXTq50EoENruCHOW3txoztzu6F-YLI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
