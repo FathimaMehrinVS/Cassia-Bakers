@@ -1,0 +1,21 @@
+# Cassia Bakery ERP - Project Requirements
+# This is a Flutter/Dart project. Dependencies are defined in pubspec.yaml.
+# To install the project dependencies, run:
+#   flutter pub get
+
+# --- Flutter SDK & Environment ---
+Flutter SDK: >= 3.10.0 (compatible with Dart SDK ^3.10.7)
+
+# --- Flutter Package Dependencies (from pubspec.yaml) ---
+cupertino_icons: ^1.0.8
+mobile_scanner: ^7.2.0
+image_picker: ^1.2.2
+
+# --- Dev Dependencies ---
+flutter_lints: ^6.0.0
+
+# --- Platform-Specific Prerequisites ---
+# Android: Android Studio, Android SDK, and JDK (Java Development Kit)
+# iOS/macOS: Xcode and CocoaPods (Mac only)
+# Windows: Visual Studio with "Desktop development with C++" workload
+# Web: Chrome (or any modern web browser for debugging)
