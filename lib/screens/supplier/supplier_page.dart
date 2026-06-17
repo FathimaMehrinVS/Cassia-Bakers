@@ -88,17 +88,13 @@ class _SupplierPageState extends State<SupplierPage> {
 
       if (initialDue > 0) {
         final now = DateTime.now();
-        final timeStr =
-            '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} ${now.hour >= 12 ? 'PM' : 'AM'}';
-        final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        final dateStr = '${now.day} ${months[now.month - 1]} ${now.year}';
 
         await SupplierService().addTransaction(
           id,
           SupplierTransaction(
             id: '',
             description: 'Opening balance',
-            date: '$dateStr at $timeStr',
+            date: now,
             amount: initialDue,
             isPayment: false,
           ),
