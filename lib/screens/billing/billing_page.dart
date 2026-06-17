@@ -1206,13 +1206,28 @@ class BarcodeScannerDialog extends StatefulWidget {
   State<BarcodeScannerDialog> createState() => _BarcodeScannerDialogState();
 }
 
-class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
+class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> with SingleTickerProviderStateMixin {
   final MobileScannerController _controller = MobileScannerController();
   bool _cameraHasError = false;
+  late AnimationController _animationController;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+  }
 
   @override
   void dispose() {
     _controller.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -1272,31 +1287,72 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
                     else
                       _buildCameraErrorPlaceholder(),
 
-                    // Scanner Overlay Graphic (Transparent window with pulsing/static indicator line)
+                    // Scanner Overlay Graphic (Transparent window with dynamic green laser sweep)
                     Positioned.fill(
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.2),
+                          color: Colors.black.withValues(alpha: 0.5),
                         ),
                         child: Center(
                           child: Container(
-                            width: 200,
-                            height: 200,
+                            width: 220,
+                            height: 220,
                             decoration: BoxDecoration(
-                              border: Border.all(color: AppTheme.primary, width: 3),
+                              border: Border.all(color: Colors.greenAccent, width: 2.5),
                               borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.greenAccent.withValues(alpha: 0.15),
+                                  blurRadius: 12,
+                                  spreadRadius: 1,
+                                ),
+                              ],
                             ),
+                            clipBehavior: Clip.antiAlias,
                             child: Stack(
                               children: [
-                                // Scanning indicator line
-                                Positioned(
-                                  top: 96,
-                                  left: 10,
-                                  right: 10,
-                                  child: Container(
-                                    height: 3,
-                                    color: Colors.red,
-                                  ),
+                                AnimatedBuilder(
+                                  animation: _animation,
+                                  builder: (context, child) {
+                                    return Positioned(
+                                      top: _animation.value * 180, // Sweep from 0 to 180px in a 220px box
+                                      left: 0,
+                                      right: 0,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          // Glowing green sweep laser line
+                                          Container(
+                                            height: 3,
+                                            decoration: BoxDecoration(
+                                              color: Colors.greenAccent,
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.greenAccent.withValues(alpha: 0.9),
+                                                  blurRadius: 8,
+                                                  spreadRadius: 1.5,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          // Soft green gradient trailing shade
+                                          Container(
+                                            height: 40,
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.topCenter,
+                                                end: Alignment.bottomCenter,
+                                                colors: [
+                                                  Colors.greenAccent.withValues(alpha: 0.3),
+                                                  Colors.transparent,
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
                                 ),
                               ],
                             ),
