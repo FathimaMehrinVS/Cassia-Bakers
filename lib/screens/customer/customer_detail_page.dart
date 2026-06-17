@@ -481,7 +481,13 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                 elevation: 0,
                               ),
-                              onPressed: () {},
+                              onPressed: () => _showSmsReminder(
+                                context,
+                                phone: widget.customer.phone,
+                                name: widget.customer.name,
+                                dueAmount: widget.customer.netDue,
+                                label: 'customer',
+                              ),
                               icon: const Icon(Icons.message, size: 14),
                               label: const Text('Remind', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                             ),
@@ -601,6 +607,94 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
         },
       ),
     );
+  }
+
+  // ─── SMS Reminder ──────────────────────────────────────────────────────────
+  Future<void> _showSmsReminder(
+    BuildContext ctx, {
+    required String phone,
+    required String name,
+    required double dueAmount,
+    required String label,
+  }) async {
+    if (phone.trim().isEmpty) {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(content: Text('No phone number saved for this $label.')),
+      );
+      return;
+    }
+    final defaultMsg =
+        'Hello $name, this is a reminder from Cassia Bakers. '
+        'You have an outstanding due of ₹${dueAmount.toStringAsFixed(0)}. '
+        'Kindly clear the balance at your earliest convenience. Thank you!';
+    final controller = TextEditingController(text: defaultMsg);
+    final confirmed = await showDialog<bool>(
+      context: ctx,
+      builder: (dCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.sms, color: Colors.green),
+            const SizedBox(width: 8),
+            Text('Remind $name'),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'To: $phone',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Message (editable):',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: controller,
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.all(10),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green[800],
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            icon: const Icon(Icons.send, size: 16),
+            label: const Text('SEND SMS'),
+            onPressed: () => Navigator.pop(dCtx, true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final msg = Uri.encodeComponent(controller.text.trim());
+    final smsUri = Uri.parse('sms:${phone.trim()}?body=$msg');
+    if (await canLaunchUrl(smsUri)) {
+      await launchUrl(smsUri);
+    } else {
+      if (!ctx.mounted) return;
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        const SnackBar(content: Text('Could not open SMS app.')),
+      );
+    }
   }
 
   Widget _buildUtilityIcon(IconData icon, VoidCallback onTap) {
