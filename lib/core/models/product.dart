@@ -97,6 +97,7 @@ class InventoryItem {
   final String description;
   String? imageUrl;
   String? imageName;
+  final List<ProductSizeOption> sizes;
 
   InventoryItem({
     required this.id,
@@ -111,6 +112,7 @@ class InventoryItem {
     required this.description,
     this.imageUrl,
     this.imageName,
+    required this.sizes,
   });
 
   double get stockValue => stock * sellingRate;
@@ -123,9 +125,7 @@ class InventoryItem {
       barcode: barcode,
       gstRate: 0.05,
       stock: stock,
-      sizes: [
-        ProductSizeOption(label: 'Standard ($unit)', price: sellingRate),
-      ],
+      sizes: sizes,
     );
   }
 
@@ -143,11 +143,27 @@ class InventoryItem {
       'description': description,
       'imageUrl': imageUrl,
       'imageName': imageName,
+      'sizes': sizes.map((s) => s.toMap()).toList(),
     };
   }
 
   factory InventoryItem.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
+    final sizesList = data['sizes'] as List?;
+    List<ProductSizeOption> parsedSizes = [];
+
+    if (sizesList != null && sizesList.isNotEmpty) {
+      parsedSizes = sizesList
+          .map((s) => ProductSizeOption.fromMap(Map<String, dynamic>.from(s)))
+          .toList();
+    } else {
+      final sellingRate = (data['sellingRate'] as num? ?? 0.0).toDouble();
+      final unit = data['unit'] as String? ?? 'pcs';
+      parsedSizes = [
+        ProductSizeOption(label: 'Standard ($unit)', price: sellingRate),
+      ];
+    }
+
     return InventoryItem(
       id: doc.id,
       name: data['name'] as String? ?? '',
@@ -161,6 +177,7 @@ class InventoryItem {
       description: data['description'] as String? ?? '',
       imageUrl: data['imageUrl'] as String?,
       imageName: data['imageName'] as String?,
+      sizes: parsedSizes,
     );
   }
 }

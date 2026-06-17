@@ -6,6 +6,7 @@ import '../../core/models/product.dart';
 import '../../core/models/order.dart';
 import '../../core/services/product_service.dart';
 import '../../core/services/order_service.dart';
+import '../notifications/notification_center_page.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom Barcode Icon Widget
@@ -73,7 +74,8 @@ class _BillingPageState extends State<BillingPage> {
   bool _isLoadingCatalog = true;
 
   // ── State Variables ────────────────────────────────────────────────────────
-  final Map<String, CartItem> _cart = {}; // key: productId
+  final Map<String, CartItem> _cart = {}; // key: productId_sizeLabel
+  final Map<String, ProductSizeOption> _selectedCatalogSizes = {}; // active visual size choice for catalog dropdowns
   String _selectedCategory = 'All';
   String _searchQuery = '';
   double _discount = 0.0;
@@ -175,14 +177,38 @@ class _BillingPageState extends State<BillingPage> {
   }
 
   // ── Cart State Mutators ────────────────────────────────────────────────────
+  int _getProductCartQuantity(String productId) {
+    return _cart.values
+        .where((item) => item.product.id == productId)
+        .fold(0, (sum, item) => sum + item.quantity);
+  }
+
   void _updateQuantity(Product product, ProductSizeOption size, int delta) {
     setState(() {
-      final existingItem = _cart[product.id];
+      final key = '${product.id}_${size.label}';
+      final existingItem = _cart[key];
       if (existingItem != null) {
         final newQty = existingItem.quantity + delta;
         if (newQty <= 0) {
-          _cart.remove(product.id);
-        } else if (newQty > product.stock) {
+          _cart.remove(key);
+        } else {
+          final currentProductTotalQty = _getProductCartQuantity(product.id);
+          final newProductTotalQty = currentProductTotalQty + delta;
+          if (newProductTotalQty > product.stock) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Cannot add more. Only ${product.stock.toStringAsFixed(0)} left in stock!'),
+                backgroundColor: Colors.red[800],
+              ),
+            );
+          } else {
+            existingItem.quantity = newQty;
+          }
+        }
+      } else if (delta > 0) {
+        final currentProductTotalQty = _getProductCartQuantity(product.id);
+        final newProductTotalQty = currentProductTotalQty + delta;
+        if (newProductTotalQty > product.stock) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Cannot add more. Only ${product.stock.toStringAsFixed(0)} left in stock!'),
@@ -190,36 +216,12 @@ class _BillingPageState extends State<BillingPage> {
             ),
           );
         } else {
-          existingItem.quantity = newQty;
-        }
-      } else if (delta > 0) {
-        if (product.stock <= 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Item is out of stock!'),
-              backgroundColor: Colors.red[800],
-            ),
-          );
-        } else {
-          _cart[product.id] = CartItem(
+          _cart[key] = CartItem(
             product: product,
             selectedSize: size,
             quantity: delta,
           );
         }
-      }
-    });
-  }
-
-  void _changeItemSize(Product product, ProductSizeOption newSize) {
-    setState(() {
-      final existingItem = _cart[product.id];
-      if (existingItem != null) {
-        _cart[product.id] = CartItem(
-          product: product,
-          selectedSize: newSize,
-          quantity: existingItem.quantity,
-        );
       }
     });
   }
@@ -243,6 +245,7 @@ class _BillingPageState extends State<BillingPage> {
       
       // Filter list to only show the scanned item in the interface
       setState(() {
+        _selectedCatalogSizes[product.id] = defaultSize;
         _searchQuery = cleanBarcode;
         _searchController.text = cleanBarcode;
       });
@@ -425,7 +428,11 @@ class _BillingPageState extends State<BillingPage> {
           IconButton(
             icon: const Icon(Icons.notifications_outlined, size: 26),
             tooltip: 'Notifications',
-            onPressed: () {},
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const NotificationCenterPage()),
+              );
+            },
           ),
           const SizedBox(width: 8),
         ],
@@ -544,9 +551,10 @@ class _BillingPageState extends State<BillingPage> {
                             itemBuilder: (context, index) {
                               final product = filteredCatalog[index];
                               // Read active sizes / quantities from cart
-                              final cartItem = _cart[product.id];
-                              final selectedSize = cartItem?.selectedSize ??
+                              final selectedSize = _selectedCatalogSizes[product.id] ??
                                   (product.sizes.length > 1 ? product.sizes[1] : product.sizes[0]);
+                              final key = '${product.id}_${selectedSize.label}';
+                              final cartItem = _cart[key];
                               final quantity = cartItem?.quantity ?? 0;
 
                               return _buildCatalogItemCard(product, selectedSize, quantity);
@@ -683,12 +691,9 @@ class _BillingPageState extends State<BillingPage> {
                         ? null
                         : (newSize) {
                             if (newSize != null) {
-                              if (quantity > 0) {
-                                _changeItemSize(product, newSize);
-                              } else {
-                                // If quantity was 0, auto-add 1 with the selected size
-                                _updateQuantity(product, newSize, 1);
-                              }
+                              setState(() {
+                                _selectedCatalogSizes[product.id] = newSize;
+                              });
                             }
                           },
                   ),
@@ -961,7 +966,7 @@ class _BillingPageState extends State<BillingPage> {
                       Expanded(
                         flex: 4,
                         child: Text(
-                          item.product.name,
+                          '${item.product.name} (${item.selectedSize.label})',
                           style: const TextStyle(fontSize: 14, color: AppTheme.textDark, fontWeight: FontWeight.w500),
                         ),
                       ),

@@ -50,6 +50,7 @@ class _InventoryPageState extends State<InventoryPage> {
   List<InventoryItem> _items = [];
   String? _attachedImageUrl;
   String? _editingOriginalProductId; // Track original ID during edits
+  List<ProductSizeOption> _formSizes = [];
   late final Stream<List<InventoryItem>> _inventoryStream;
   StreamSubscription<List<String>>? _categoriesSubscription;
 
@@ -188,6 +189,7 @@ class _InventoryPageState extends State<InventoryPage> {
           _attachedImageUrl = item.imageUrl;
           _imageUrlController.text = item.imageUrl ?? '';
           _editingOriginalProductId = item.id;
+          _formSizes = List.from(item.sizes);
           _showAddItemForm = true;
         });
         _scrollToBottom(true);
@@ -212,6 +214,7 @@ class _InventoryPageState extends State<InventoryPage> {
           _attachedImageName = null;
           _attachedImageUrl = null;
           _editingOriginalProductId = null;
+          _formSizes = [];
           _showAddItemForm = true;
         });
         _scrollToBottom(true);
@@ -333,6 +336,73 @@ class _InventoryPageState extends State<InventoryPage> {
     }
   }
 
+  void _addFormSizeOption() {
+    final labelCtrl = TextEditingController();
+    final priceCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Add Size/Unit Option', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: labelCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Option Label (e.g. 500g, Pack of 6)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: priceCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Price (₹)',
+                border: OutlineInputBorder(),
+                prefixText: '₹ ',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              final label = labelCtrl.text.trim();
+              final price = double.tryParse(priceCtrl.text) ?? 0.0;
+              if (label.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter an option label')),
+                );
+                return;
+              }
+              if (price <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a valid price')),
+                );
+                return;
+              }
+              setState(() {
+                _formSizes.add(ProductSizeOption(label: label, price: price));
+              });
+              Navigator.of(context).pop();
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _saveProduct() async {
     final id = _productIdController.text.trim().isEmpty ? 'P000' : _productIdController.text.trim();
     final name = _itemNameController.text.trim();
@@ -375,6 +445,10 @@ class _InventoryPageState extends State<InventoryPage> {
         }
       }
 
+      final List<ProductSizeOption> finalSizes = _formSizes.isNotEmpty
+          ? _formSizes
+          : [ProductSizeOption(label: 'Standard ($_selectedItemUnit)', price: sellingVal)];
+
       final newItem = InventoryItem(
         id: id,
         name: name,
@@ -388,6 +462,7 @@ class _InventoryPageState extends State<InventoryPage> {
         description: desc,
         imageUrl: imageUrl,
         imageName: _attachedImageName,
+        sizes: finalSizes,
       );
 
       await ProductService().saveProduct(newItem);
@@ -408,6 +483,7 @@ class _InventoryPageState extends State<InventoryPage> {
         _attachedImageName = null;
         _attachedImageUrl = null;
         _editingOriginalProductId = null;
+        _formSizes = [];
         _showAddItemForm = false;
         _resetProductId();
       });
@@ -863,6 +939,7 @@ class _InventoryPageState extends State<InventoryPage> {
                                       _attachedImageUrl = item.imageUrl;
                                       _imageUrlController.text = item.imageUrl ?? '';
                                       _editingOriginalProductId = item.id;
+                                      _formSizes = List.from(item.sizes);
 
                                       _showAddItemForm = true;
                                     });
@@ -1320,6 +1397,66 @@ class _InventoryPageState extends State<InventoryPage> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 12),
+
+                      // Sizes & Custom Pricing Section
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Custom Sizes / Units (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                          TextButton.icon(
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('Add Option'),
+                            onPressed: isIdDuplicate ? null : () {
+                              _addFormSizeOption();
+                            },
+                          ),
+                        ],
+                      ),
+                      if (_formSizes.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(6),
+                            color: Colors.grey[50],
+                          ),
+                          child: Column(
+                            children: [
+                              for (int i = 0; i < _formSizes.length; i++)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 6.0),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          _formSizes[i].label,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                        ),
+                                      ),
+                                      Text(
+                                        '₹ ${_formSizes[i].price.toStringAsFixed(0)}',
+                                        style: TextStyle(color: Colors.green[800], fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        onPressed: () {
+                                          setState(() {
+                                            _formSizes.removeAt(i);
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 12),
 
                       // Description
