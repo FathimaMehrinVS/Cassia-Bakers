@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/core.dart';
 import '../../core/models/staff.dart';
 import '../../core/services/staff_service.dart';
@@ -431,7 +432,24 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                     elevation: 0,
                                   ),
-                                  onPressed: () {},
+                                  onPressed: () async {
+                                    final phone = widget.staff.phone.trim();
+                                    if (phone.isEmpty) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('No phone number saved for this staff member.')),
+                                      );
+                                      return;
+                                    }
+                                    final uri = Uri.parse('tel:$phone');
+                                    if (await canLaunchUrl(uri)) {
+                                      await launchUrl(uri);
+                                    } else {
+                                      if (!context.mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Could not launch call to $phone')),
+                                      );
+                                    }
+                                  },
                                   icon: const Icon(Icons.phone, size: 14),
                                   label: const Text('Call', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                                 ),
