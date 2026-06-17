@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../../core/core.dart';
 import '../../core/models/product.dart';
 import '../../core/models/order.dart';
@@ -94,10 +98,21 @@ class _BillingPageState extends State<BillingPage> {
   ];
   StreamSubscription<List<String>>? _categoriesSubscription;
 
-  // Temporary billing metadata matching mockup
-  final String _billNo = '1025';
-  final String _billDate = '27-05-2026';
-  final String _billTime = '08:45 PM';
+  // Dynamic billing metadata matching mockup
+  String _billNo = '1025';
+  String _billDate = '27-05-2026';
+  String _billTime = '08:45 PM';
+
+  String _formatDateOnly(DateTime dt) {
+    return '${dt.day.toString().padLeft(2, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.year}';
+  }
+
+  String _formatTimeOnly(DateTime dt) {
+    final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
+    final minute = dt.minute.toString().padLeft(2, '0');
+    final period = dt.hour >= 12 ? 'PM' : 'AM';
+    return '${hour.toString().padLeft(2, '0')}:$minute $period';
+  }
 
   @override
   void initState() {
@@ -132,8 +147,14 @@ class _BillingPageState extends State<BillingPage> {
   Future<void> _loadCatalog() async {
     try {
       final catalogData = await ProductService().getCatalog();
+      final ordersList = await OrderService().getOrders();
+      final nextBillNum = 1025 + ordersList.length;
+      final now = DateTime.now();
       setState(() {
         _catalog = catalogData;
+        _billNo = '$nextBillNum';
+        _billDate = _formatDateOnly(now);
+        _billTime = _formatTimeOnly(now);
         _isLoadingCatalog = false;
       });
     } catch (e) {
@@ -809,7 +830,14 @@ class _BillingPageState extends State<BillingPage> {
               IconButton(
                 icon: const Icon(Icons.keyboard_arrow_up, size: 32, color: AppTheme.primary),
                 tooltip: 'Show Receipt details',
-                onPressed: () => setState(() => _isReceiptExpanded = true),
+                onPressed: () {
+                  final now = DateTime.now();
+                  setState(() {
+                    _billDate = _formatDateOnly(now);
+                    _billTime = _formatTimeOnly(now);
+                    _isReceiptExpanded = true;
+                  });
+                },
               ),
             ],
           ),
@@ -909,7 +937,7 @@ class _BillingPageState extends State<BillingPage> {
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             children: [
-              // Table Header
+               // Table Header
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 6),
                 child: Row(
@@ -945,6 +973,7 @@ class _BillingPageState extends State<BillingPage> {
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textDark),
                       ),
                     ),
+                    SizedBox(width: 28), // Space for delete button
                   ],
                 ),
               ),
@@ -986,6 +1015,18 @@ class _BillingPageState extends State<BillingPage> {
                           textAlign: TextAlign.right,
                           style: const TextStyle(fontSize: 14, color: AppTheme.textDark, fontWeight: FontWeight.w500),
                         ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: Icon(Icons.delete_forever_outlined, color: Colors.red[800], size: 20),
+                        onPressed: () {
+                          setState(() {
+                            final key = '${item.product.id}_${item.selectedSize.label}';
+                            _cart.remove(key);
+                          });
+                        },
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
                       ),
                     ],
                   ),
@@ -1072,7 +1113,19 @@ class _BillingPageState extends State<BillingPage> {
                     child: _buildReceiptActionButton(
                       label: 'Print',
                       color: const Color(0xFFA22204), // Reddish-brown
-                      onPressed: () {},
+                      onPressed: () async {
+                        try {
+                          final pdfBytes = await _generateInvoicePdf();
+                          await Printing.layoutPdf(
+                            onLayout: (PdfPageFormat format) async => pdfBytes,
+                            name: 'Invoice_$_billNo',
+                          );
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to print: $e')),
+                          );
+                        }
+                      },
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -1080,7 +1133,19 @@ class _BillingPageState extends State<BillingPage> {
                     child: _buildReceiptActionButton(
                       label: 'Share\nWhatsapp',
                       color: const Color(0xFF007F0E), // WhatsApp Green
-                      onPressed: () {},
+                      onPressed: () async {
+                        try {
+                          final pdfBytes = await _generateInvoicePdf();
+                          await Printing.sharePdf(
+                            bytes: pdfBytes,
+                            filename: 'invoice_$_billNo.pdf',
+                          );
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to share: $e')),
+                          );
+                        }
+                      },
                     ),
                   ),
                   const SizedBox(width: 10),
