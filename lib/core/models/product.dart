@@ -115,6 +115,20 @@ class InventoryItem {
 
   double get stockValue => stock * sellingRate;
 
+  Product toProduct() {
+    return Product(
+      id: id,
+      name: name,
+      category: category,
+      barcode: barcode,
+      gstRate: 0.05,
+      stock: stock,
+      sizes: [
+        ProductSizeOption(label: 'Standard ($unit)', price: sellingRate),
+      ],
+    );
+  }
+
   Map<String, dynamic> toFirestore() {
     return {
       'id': id,

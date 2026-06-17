@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/core.dart';
 import '../../core/models/product.dart';
 import '../../core/services/product_service.dart';
+import '../billing/billing_page.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // InventoryPage Widget
@@ -155,6 +156,68 @@ class _InventoryPageState extends State<InventoryPage> {
     final nextId = maxId + 1;
     final paddedId = 'P${nextId.toString().padLeft(3, '0')}';
     _productIdController.text = paddedId;
+  }
+
+  Future<void> _openBarcodeScanner() async {
+    final scannedCode = await showDialog<String>(
+      context: context,
+      builder: (context) => BarcodeScannerDialog(catalog: _items.map((e) => e.toProduct()).toList()),
+    );
+
+    if (scannedCode != null && scannedCode.isNotEmpty) {
+      final existingIndex = _items.indexWhere(
+        (item) => item.barcode.toLowerCase() == scannedCode.toLowerCase() ||
+                  item.id.toLowerCase() == scannedCode.toLowerCase(),
+      );
+
+      if (existingIndex != -1) {
+        final item = _items[existingIndex];
+        setState(() {
+          _itemNameController.text = item.name;
+          _productIdController.text = item.id;
+          _barcodeController.text = item.barcode;
+          _stockController.text = item.stock.toStringAsFixed(0);
+          _reorderController.text = item.reorderLevel.toStringAsFixed(0);
+          _purchaseRateController.text = item.purchaseRate.toStringAsFixed(0);
+          _sellingRateController.text = item.sellingRate.toStringAsFixed(0);
+          _descriptionController.text = item.description;
+          _selectedItemCategory = item.category;
+          _selectedItemUnit = item.unit;
+          _attachedImageBytes = null;
+          _attachedImageName = item.imageName;
+          _attachedImageUrl = item.imageUrl;
+          _imageUrlController.text = item.imageUrl ?? '';
+          _editingOriginalProductId = item.id;
+          _showAddItemForm = true;
+        });
+        _scrollToBottom(true);
+        _showSuccessSnackbar('Found existing item: "${item.name}". Populated edit form.');
+      } else {
+        setState(() {
+          _itemNameController.clear();
+          _productIdController.text = scannedCode.startsWith('P') && scannedCode.length == 4 ? scannedCode : '';
+          if (_productIdController.text.isEmpty) {
+            _resetProductId();
+          }
+          _barcodeController.text = scannedCode;
+          _stockController.clear();
+          _reorderController.clear();
+          _purchaseRateController.clear();
+          _sellingRateController.clear();
+          _descriptionController.clear();
+          _imageUrlController.clear();
+          _selectedItemCategory = 'Cakes';
+          _selectedItemUnit = 'pcs';
+          _attachedImageBytes = null;
+          _attachedImageName = null;
+          _attachedImageUrl = null;
+          _editingOriginalProductId = null;
+          _showAddItemForm = true;
+        });
+        _scrollToBottom(true);
+        _showSuccessSnackbar('New code scanned. Initialized new product form.');
+      }
+    }
   }
 
   // ── Calculations ──────────────────────────────────────────────────────────
@@ -503,15 +566,19 @@ class _InventoryPageState extends State<InventoryPage> {
                 ),
                 const SizedBox(width: 12),
                 // Scanner decoration icon
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey[300]!, width: 1.5),
-                    borderRadius: BorderRadius.circular(8),
+                InkWell(
+                  onTap: _openBarcodeScanner,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[300]!, width: 1.5),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    alignment: Alignment.center,
+                    child: const BarcodeScannerIcon(),
                   ),
-                  alignment: Alignment.center,
-                  child: const BarcodeScannerIcon(),
                 ),
               ],
             ),
@@ -1111,7 +1178,10 @@ class _InventoryPageState extends State<InventoryPage> {
                                     hintText: 'Enter SKU / Scan Barcode',
                                     border: const OutlineInputBorder(),
                                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                    suffixIcon: Icon(Icons.qr_code_scanner, color: Colors.grey[600]),
+                                    suffixIcon: IconButton(
+                                      icon: const Icon(Icons.qr_code_scanner, color: AppTheme.primary),
+                                      onPressed: _openBarcodeScanner,
+                                    ),
                                   ),
                                 ),
                               ],
