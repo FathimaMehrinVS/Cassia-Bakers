@@ -48,18 +48,20 @@ class TodaysSalesCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(
+                      Flexible(
                         child: Text(
                           isToday ? "Today's Sales" : "Sales for $dateFormatted",
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 fontWeight: FontWeight.w600,
                                 color: AppTheme.textMid,
-                                fontSize: 20,
+                                fontSize: 18,
                               ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
                       InkWell(
                         onTap: () async {
                           final picked = await showDatePicker(
@@ -89,7 +91,7 @@ class TodaysSalesCard extends StatelessWidget {
                           padding: EdgeInsets.all(6.0),
                           child: Icon(
                             Icons.calendar_today_outlined,
-                            size: 24,
+                            size: 22,
                             color: AppTheme.primary,
                           ),
                         ),

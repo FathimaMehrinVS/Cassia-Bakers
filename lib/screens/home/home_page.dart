@@ -510,9 +510,9 @@ class _HomeBodyState extends State<_HomeBody> {
                       Text(
                         _getFormattedDateAndDay(DateTime.now()),
                         style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textMid,
                         ),
                       ),
                       const SizedBox(height: 20),
