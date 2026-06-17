@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
@@ -16,8 +15,6 @@ class InvoiceHistoryPage extends StatefulWidget {
 class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  bool _isDownloading = false;
-  String? _downloadingBillNo;
 
   @override
   void dispose() {
@@ -25,38 +22,218 @@ class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
     super.dispose();
   }
 
-  Future<void> _viewInvoicePdf(InvoiceRecord record) async {
-    if (_isDownloading) return;
-
-    setState(() {
-      _isDownloading = true;
-      _downloadingBillNo = record.billNo;
-    });
-
-    try {
-      final pdfBytes = await InvoiceService().downloadPdf(record.pdfUrl);
-      
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async => pdfBytes,
-        name: 'Invoice_${record.billNo}',
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load PDF: $e'),
-            backgroundColor: Colors.red[800],
+  void _showInvoiceDetails(InvoiceRecord record) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+          ),
+          padding: const EdgeInsets.only(left: 24, right: 24, top: 16, bottom: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Pull bar indicator
+              Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              // Shop Header
+              const Text(
+                'Cassia Bakers',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textDark,
+                ),
+              ),
+              const Text(
+                'The Art of Baking - Aluva, Kerala',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                  color: AppTheme.textMid,
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Metadata
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Bill No : ${record.billNo}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textDark, fontSize: 14),
+                  ),
+                  Text(
+                    '${record.date}   ${record.time}',
+                    style: const TextStyle(color: AppTheme.textMid, fontSize: 13),
+                  ),
+                ],
+              ),
+              const Divider(thickness: 1.5, height: 24, color: Colors.black87),
+              
+              // Items List
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: record.items.length,
+                  itemBuilder: (context, index) {
+                    final item = record.items[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 4,
+                            child: Text(
+                              '${item['name']} (${item['size'] ?? 'Standard'})',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppTheme.textDark),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              '${item['quantity'] ?? item['qty']}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 14, color: AppTheme.textDark),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              '₹${(item['rate'] as num? ?? 0.0).toStringAsFixed(0)}',
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(fontSize: 14, color: AppTheme.textDark),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              '₹${(item['amount'] as num? ?? 0.0).toStringAsFixed(0)}',
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const Divider(thickness: 1.5, height: 24, color: Colors.black87),
+              
+              // Totals
+              _buildTotalRow('Subtotal', record.subtotal),
+              _buildTotalRow('Discount', record.discount),
+              _buildTotalRow('GST (5%)', record.gst),
+              const Divider(thickness: 1.5, height: 24, color: Colors.black87),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'TOTAL',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.textDark),
+                  ),
+                  Text(
+                    '₹${record.total.toStringAsFixed(0)}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.textDark),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              
+              // Action Buttons: Print / Share
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFA22204),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      icon: const Icon(Icons.print, size: 20),
+                      label: const Text('Print Receipt', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      onPressed: () async {
+                        try {
+                          final pdfBytes = await InvoiceService().generateInvoicePdf(record);
+                          await Printing.layoutPdf(
+                            onLayout: (PdfPageFormat format) async => pdfBytes,
+                            name: 'Invoice_${record.billNo}',
+                          );
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to print: $e')),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF007F0E),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      icon: const Icon(Icons.share, size: 20),
+                      label: const Text('Share Receipt', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      onPressed: () async {
+                        try {
+                          final pdfBytes = await InvoiceService().generateInvoicePdf(record);
+                          await Printing.sharePdf(
+                            bytes: pdfBytes,
+                            filename: 'invoice_${record.billNo}.pdf',
+                          );
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to share: $e')),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
           ),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isDownloading = false;
-          _downloadingBillNo = null;
-        });
-      }
-    }
+      },
+    );
+  }
+
+  Widget _buildTotalRow(String label, double val) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: AppTheme.textMid, fontSize: 14)),
+          Text('₹${val.toStringAsFixed(0)}', style: const TextStyle(color: AppTheme.textDark, fontSize: 14)),
+        ],
+      ),
+    );
   }
 
   @override
@@ -187,7 +364,6 @@ class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
                   separatorBuilder: (context, index) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final record = filtered[index];
-                    final isThisDownloading = _isDownloading && _downloadingBillNo == record.billNo;
 
                     return Container(
                       decoration: BoxDecoration(
@@ -206,7 +382,7 @@ class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
                         color: Colors.transparent,
                         child: InkWell(
                           borderRadius: BorderRadius.circular(14),
-                          onTap: () => _viewInvoicePdf(record),
+                          onTap: () => _showInvoiceDetails(record),
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
                             child: Row(
@@ -287,20 +463,11 @@ class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
                                       ),
                                     ),
                                     const SizedBox(height: 6),
-                                    isThisDownloading
-                                        ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary),
-                                            ),
-                                          )
-                                        : const Icon(
-                                            Icons.chevron_right,
-                                            color: AppTheme.textSub,
-                                            size: 20,
-                                          ),
+                                    const Icon(
+                                      Icons.chevron_right,
+                                      color: AppTheme.textSub,
+                                      size: 20,
+                                    ),
                                   ],
                                 ),
                               ],

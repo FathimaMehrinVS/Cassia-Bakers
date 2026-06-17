@@ -1121,7 +1121,12 @@ class _BillingPageState extends State<BillingPage> {
                           builder: (context) => const Center(child: CircularProgressIndicator()),
                         );
                         try {
-                          final pdfBytes = await _generateAndSaveInvoice();
+                          final pdfBytes = await _generateInvoicePdf();
+                          // Try saving invoice metadata and PDF in background, do not block printing
+                          _generateAndSaveInvoice().catchError((e) {
+                            debugPrint('Background invoice save failed: $e');
+                            return Uint8List(0);
+                          });
                           if (mounted) Navigator.of(context).pop();
                           await Printing.layoutPdf(
                             onLayout: (PdfPageFormat format) async => pdfBytes,
@@ -1149,7 +1154,12 @@ class _BillingPageState extends State<BillingPage> {
                           builder: (context) => const Center(child: CircularProgressIndicator()),
                         );
                         try {
-                          final pdfBytes = await _generateAndSaveInvoice();
+                          final pdfBytes = await _generateInvoicePdf();
+                          // Try saving invoice metadata and PDF in background, do not block sharing
+                          _generateAndSaveInvoice().catchError((e) {
+                            debugPrint('Background invoice save failed: $e');
+                            return Uint8List(0);
+                          });
                           if (mounted) Navigator.of(context).pop();
                           await Printing.sharePdf(
                             bytes: pdfBytes,
@@ -1203,8 +1213,14 @@ class _BillingPageState extends State<BillingPage> {
                           // Create order in Firestore (which atomically decrements stock)
                           await OrderService().createOrder(newOrder);
 
+                          bool invoiceSaved = true;
                           // Generate and save PDF metadata inside 'invoices' Firestore collection
-                          await _generateAndSaveInvoice();
+                          try {
+                            await _generateAndSaveInvoice();
+                          } catch (e) {
+                            invoiceSaved = false;
+                            debugPrint('Failed to upload/save invoice PDF: $e');
+                          }
 
                           // Generate next unique bill number
                           final nextBill = await InvoiceService().getNextBillNumber();
@@ -1224,9 +1240,14 @@ class _BillingPageState extends State<BillingPage> {
 
                           if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Order saved and stock updated successfully!', style: TextStyle(fontSize: 15)),
-                              backgroundColor: AppTheme.primary,
+                            SnackBar(
+                              content: Text(
+                                invoiceSaved
+                                    ? 'Order saved and stock updated successfully!'
+                                    : 'Order saved successfully, but invoice PDF failed to upload (Firebase Storage error).',
+                                style: const TextStyle(fontSize: 15),
+                              ),
+                              backgroundColor: invoiceSaved ? AppTheme.primary : Colors.orange[800],
                             ),
                           );
                         } catch (e) {
