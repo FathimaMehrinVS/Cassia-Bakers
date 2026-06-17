@@ -1122,11 +1122,6 @@ class _BillingPageState extends State<BillingPage> {
                         );
                         try {
                           final pdfBytes = await _generateInvoicePdf();
-                          // Try saving invoice metadata and PDF in background, do not block printing
-                          _generateAndSaveInvoice().catchError((e) {
-                            debugPrint('Background invoice save failed: $e');
-                            return Uint8List(0);
-                          });
                           if (mounted) Navigator.of(context).pop();
                           await Printing.layoutPdf(
                             onLayout: (PdfPageFormat format) async => pdfBytes,
@@ -1155,11 +1150,6 @@ class _BillingPageState extends State<BillingPage> {
                         );
                         try {
                           final pdfBytes = await _generateInvoicePdf();
-                          // Try saving invoice metadata and PDF in background, do not block sharing
-                          _generateAndSaveInvoice().catchError((e) {
-                            debugPrint('Background invoice save failed: $e');
-                            return Uint8List(0);
-                          });
                           if (mounted) Navigator.of(context).pop();
                           await Printing.sharePdf(
                             bytes: pdfBytes,
