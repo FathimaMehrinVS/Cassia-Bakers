@@ -17,6 +17,7 @@ import '../inventory/inventory_page.dart';
 import '../customer/customer_page.dart';
 import '../staff/staff_page.dart';
 import '../notifications/notification_center_page.dart';
+import '../../widgets/notification_bell.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Navigation destination model
@@ -79,15 +80,7 @@ class _HomePageState extends State<HomePage> {
         ),
         title: const Text('Cassia Bakery ERP'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, size: 26),
-            tooltip: 'Notifications',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const NotificationCenterPage()),
-              );
-            },
-          ),
+          const NotificationBell(size: 26),
           const SizedBox(width: 4),
         ],
         bottom: const PreferredSize(
@@ -117,15 +110,7 @@ class _HomePageState extends State<HomePage> {
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, size: 26),
-            tooltip: 'Notifications',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const NotificationCenterPage()),
-              );
-            },
-          ),
+          const NotificationBell(size: 26),
           const SizedBox(width: 8),
         ],
         bottom: PreferredSize(
@@ -221,15 +206,7 @@ class _HomePageState extends State<HomePage> {
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, size: 26),
-            tooltip: 'Notifications',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const NotificationCenterPage()),
-              );
-            },
-          ),
+          const NotificationBell(size: 26),
           const SizedBox(width: 8),
         ],
         bottom: const PreferredSize(
@@ -400,6 +377,7 @@ class _HomeBodyState extends State<_HomeBody> {
       QuickActionItem(
         label: 'Expenses',
         icon: Icons.payments_outlined,
+        onTap: () => widget.onTabSelect(2),
       ),
       QuickActionItem(
         label: 'Customers',

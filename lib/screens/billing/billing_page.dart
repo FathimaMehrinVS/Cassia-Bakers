@@ -7,6 +7,7 @@ import '../../core/models/order.dart';
 import '../../core/services/product_service.dart';
 import '../../core/services/order_service.dart';
 import '../notifications/notification_center_page.dart';
+import '../../widgets/notification_bell.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom Barcode Icon Widget
@@ -425,15 +426,7 @@ class _BillingPageState extends State<BillingPage> {
         ),
         title: const Text('Billing (POS)'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, size: 26),
-            tooltip: 'Notifications',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const NotificationCenterPage()),
-              );
-            },
-          ),
+          const NotificationBell(size: 26),
           const SizedBox(width: 8),
         ],
         bottom: const PreferredSize(
