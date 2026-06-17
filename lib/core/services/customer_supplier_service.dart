@@ -8,43 +8,7 @@ class CustomerSupplierService extends ChangeNotifier {
   factory CustomerSupplierService() => _instance;
   CustomerSupplierService._internal();
 
-  final List<CustomerData> customers = [
-    CustomerData(
-      id: 'c000',
-      name: 'Rahul Sharma',
-      phone: '+91 98765 43210',
-      dateAdded: '10 Jun 2026',
-      transactions: [
-        CustomerDueTransaction(description: 'Initial Due (Order #1002)', date: '10 Jun 2026 at 11:32 AM', amount: 2500, isPayment: false),
-        CustomerDueTransaction(description: 'Cash Payment', date: '11 Jun 2026 at 11:32 AM', amount: 1000, isPayment: true),
-      ],
-    ),
-    CustomerData(
-      id: 'c001',
-      name: 'Priya Nair',
-      phone: '+91 87654 32109',
-      dateAdded: '12 Jun 2026',
-      transactions: [
-        CustomerDueTransaction(description: 'Initial Due (Order #1005)', date: '12 Jun 2026 at 11:32 AM', amount: 850, isPayment: false),
-      ],
-    ),
-    CustomerData(
-      id: 'c002',
-      name: 'Amit Patel',
-      phone: '+91 76543 21098',
-      dateAdded: '14 Jun 2026',
-      transactions: [
-        CustomerDueTransaction(description: 'Order #1012', date: '14 Jun 2026 at 11:32 AM', amount: 3200, isPayment: false),
-      ],
-    ),
-    CustomerData(
-      id: 'c003',
-      name: 'Sneha Rao',
-      phone: '+91 65432 10987',
-      dateAdded: '15 Jun 2026',
-      transactions: [],
-    ),
-  ];
+  final List<CustomerData> customers = [];
 
   final List<SupplierData> suppliers = [
     SupplierData(
