@@ -1,120 +1,9 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../core/core.dart';
+import '../../core/models/supplier.dart';
+import '../../core/services/supplier_service.dart';
 import '../../core/services/customer_supplier_service.dart';
 import 'supplier_detail_page.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Data Models
-// ─────────────────────────────────────────────────────────────────────────────
-
-class BillItemRow {
-  String name;
-  double quantity;
-  String unit; // e.g. "kg", "gr", "pcs"
-  double rate;
-  late TextEditingController nameController;
-
-  BillItemRow({
-    required this.name,
-    required this.quantity,
-    required this.unit,
-    required this.rate,
-  }) {
-    nameController = TextEditingController(text: name);
-    nameController.addListener(() {
-      name = nameController.text;
-    });
-  }
-
-  double get amount => quantity * rate;
-}
-
-class BillData {
-  final String billNo;
-  final String date;
-  final double subtotal;
-  final double gst;
-  final double total;
-  final String notes;
-  final List<BillItemRow> items;
-  final Uint8List? attachedImageBytes;
-  final String? attachedImageName;
-
-  BillData({
-    required this.billNo,
-    required this.date,
-    required this.subtotal,
-    required this.gst,
-    required this.total,
-    required this.notes,
-    required this.items,
-    this.attachedImageBytes,
-    this.attachedImageName,
-  });
-}
-
-class SupplierTransaction {
-  final String description;
-  final String date;
-  final double amount;
-  final bool isPayment; // true = payment made (reduces due), false = bill (increases due)
-  final Uint8List? attachedImageBytes;
-  final String? attachedImageName;
-
-  SupplierTransaction({
-    required this.description,
-    required this.date,
-    required this.amount,
-    required this.isPayment,
-    this.attachedImageBytes,
-    this.attachedImageName,
-  });
-}
-
-class SupplierData {
-  final String id;
-  final String name;
-  final String phone;
-  final String gstin;
-  String status; // 'ACTIVE' or 'INACTIVE'
-  bool isEnabled;
-  final List<BillData> bills;
-  final List<SupplierTransaction> transactions;
-
-  SupplierData({
-    required this.id,
-    required this.name,
-    required this.phone,
-    required this.gstin,
-    required this.status,
-    required this.isEnabled,
-    required this.bills,
-    required this.transactions,
-  });
-
-  double get netDue {
-    double total = 0.0;
-    for (final tx in transactions) {
-      if (tx.isPayment) {
-        total -= tx.amount;
-      } else {
-        total += tx.amount;
-      }
-    }
-    return total;
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is SupplierData &&
-          runtimeType == other.runtimeType &&
-          id == other.id;
-
-  @override
-  int get hashCode => id.hashCode;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SupplierPage
@@ -128,9 +17,6 @@ class SupplierPage extends StatefulWidget {
 }
 
 class _SupplierPageState extends State<SupplierPage> {
-  // ── Supplier Directory ─────────────────────────────────────────────────────
-  List<SupplierData> get _suppliers => CustomerSupplierService().suppliers;
-
   String _searchQuery = '';
   String _activeFilter = 'ALL'; // 'ALL', 'ACTIVE', 'INACTIVE', 'RECENT'
 
@@ -172,7 +58,7 @@ class _SupplierPageState extends State<SupplierPage> {
   }
 
   // ── Add Supplier Logic ─────────────────────────────────────────────────────
-  void _saveNewSupplier() {
+  Future<void> _saveNewSupplier() async {
     if (_addNameController.text.trim().isEmpty) {
       _showErrorSnackbar('Please enter a supplier name');
       return;
@@ -186,314 +72,330 @@ class _SupplierPageState extends State<SupplierPage> {
         : _addGstinController.text.trim();
     final initialDue = double.tryParse(_addInitialDueController.text) ?? 0.0;
 
-    final now = DateTime.now();
-    final timeStr =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} ${now.hour >= 12 ? 'PM' : 'AM'}';
-    final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    final dateStr = '${now.day} ${months[now.month - 1]} ${now.year}';
+    final id = 'supplier_${DateTime.now().millisecondsSinceEpoch}';
+    final newSupplier = SupplierData(
+      id: id,
+      name: name,
+      phone: phone,
+      gstin: gstin,
+      status: 'ACTIVE',
+      isEnabled: true,
+      netDue: initialDue,
+    );
 
-    final txList = <SupplierTransaction>[];
-    if (initialDue > 0) {
-      txList.add(SupplierTransaction(
-        description: 'Opening balance',
-        date: '$dateStr at $timeStr',
-        amount: initialDue,
-        isPayment: false,
-      ));
+    try {
+      await SupplierService().addSupplier(newSupplier);
+
+      if (initialDue > 0) {
+        final now = DateTime.now();
+        final timeStr =
+            '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')} ${now.hour >= 12 ? 'PM' : 'AM'}';
+        final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        final dateStr = '${now.day} ${months[now.month - 1]} ${now.year}';
+
+        await SupplierService().addTransaction(
+          id,
+          SupplierTransaction(
+            id: '',
+            description: 'Opening balance',
+            date: '$dateStr at $timeStr',
+            amount: initialDue,
+            isPayment: false,
+          ),
+        );
+      }
+
+      setState(() {
+        _addNameController.clear();
+        _addPhoneController.clear();
+        _addGstinController.clear();
+        _addInitialDueController.clear();
+        _showAddSupplierOverlay = false;
+      });
+
+      CustomerSupplierService().notify();
+      _showSuccessSnackbar('Supplier "$name" added successfully!');
+    } catch (e) {
+      _showErrorSnackbar('Error adding supplier: $e');
     }
-
-    setState(() {
-      _suppliers.add(SupplierData(
-        id: 'supplier_${DateTime.now().millisecondsSinceEpoch}',
-        name: name,
-        phone: phone,
-        gstin: gstin,
-        status: 'ACTIVE',
-        isEnabled: true,
-        bills: [],
-        transactions: txList,
-      ));
-      _addNameController.clear();
-      _addPhoneController.clear();
-      _addGstinController.clear();
-      _addInitialDueController.clear();
-      _showAddSupplierOverlay = false;
-    });
-
-    CustomerSupplierService().notify();
-
-    _showSuccessSnackbar('Supplier "$name" added successfully!');
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final filteredSuppliers = _suppliers.where((s) {
-      if (_activeFilter == 'ACTIVE' && s.status != 'ACTIVE') return false;
-      if (_activeFilter == 'INACTIVE' && s.status != 'INACTIVE') return false;
-      if (_searchQuery.isNotEmpty) {
-        if (!s.isEnabled) return false;
-        final q = _searchQuery.toLowerCase();
-        if (!s.name.toLowerCase().contains(q) &&
-            !s.phone.contains(q) &&
-            !s.gstin.toLowerCase().contains(q)) return false;
-      }
-      return true;
-    }).toList();
+    return StreamBuilder<List<SupplierData>>(
+      stream: SupplierService().getSuppliers(),
+      builder: (context, snapshot) {
+        final suppliersList = snapshot.data ?? [];
 
-    // Hero card totals
-    final totalDue = _suppliers
-        .where((s) => s.isEnabled && s.netDue > 0)
-        .fold(0.0, (sum, s) => sum + s.netDue);
-    final activeCount = _suppliers.where((s) => s.isEnabled).length;
+        final filteredSuppliers = suppliersList.where((s) {
+          if (_activeFilter == 'ACTIVE' && s.status != 'ACTIVE') return false;
+          if (_activeFilter == 'INACTIVE' && s.status != 'INACTIVE') return false;
+          if (_searchQuery.isNotEmpty) {
+            if (!s.isEnabled) return false;
+            final q = _searchQuery.toLowerCase();
+            if (!s.name.toLowerCase().contains(q) &&
+                !s.phone.contains(q) &&
+                !s.gstin.toLowerCase().contains(q)) return false;
+          }
+          return true;
+        }).toList();
 
-    return Stack(
-      children: [
-        SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Hero Card ─────────────────────────────────────────────────
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF6C3483), Color(0xFF1A5276)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+        // Hero card totals
+        final totalDue = suppliersList
+            .where((s) => s.isEnabled && s.netDue > 0)
+            .fold(0.0, (sum, s) => sum + s.netDue);
+        final activeCount = suppliersList.where((s) => s.isEnabled).length;
+
+        return Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Hero Card ─────────────────────────────────────────────────
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF6C3483), Color(0xFF1A5276)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF6C3483).withOpacity(0.35),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Supplier Overview',
+                          style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '₹ ${totalDue.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Total You Pay  •  $activeCount Active Suppliers',
+                          style: const TextStyle(
+                              color: Colors.white60, fontSize: 13),
+                        ),
+                      ],
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF6C3483).withOpacity(0.35),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Supplier Overview',
-                      style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '₹ ${totalDue.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Total You Pay  •  $activeCount Active Suppliers',
-                      style: const TextStyle(
-                          color: Colors.white60, fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-              // ── Directory Card ─────────────────────────────────────────────
-              Card(
-                color: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  side: BorderSide(color: Colors.grey[200]!, width: 1.5),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  // ── Directory Card ─────────────────────────────────────────────
+                  Card(
+                    color: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      side: BorderSide(color: Colors.grey[200]!, width: 1.5),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Supplier Directory',
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.textDark),
-                          ),
-                          // Add Supplier button
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 8),
-                              elevation: 0,
-                            ),
-                            onPressed: () =>
-                                setState(() => _showAddSupplierOverlay = true),
-                            icon: const Icon(Icons.person_add, size: 18),
-                            label: const Text('Add Supplier',
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Supplier Directory',
                                 style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold)),
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.textDark),
+                              ),
+                              // Add Supplier button
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.primary,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 8),
+                                  elevation: 0,
+                                ),
+                                onPressed: () =>
+                                    setState(() => _showAddSupplierOverlay = true),
+                                icon: const Icon(Icons.person_add, size: 18),
+                                label: const Text('Add Supplier',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold)),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
+                          const SizedBox(height: 14),
 
-                      // Search Bar
-                      Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: TextField(
-                          onChanged: (val) =>
-                              setState(() => _searchQuery = val),
-                          style: const TextStyle(fontSize: 15),
-                          decoration: InputDecoration(
-                            hintText: 'Supplier Name / Phone / GST No',
-                            hintStyle: TextStyle(
-                                color: Colors.grey[500], fontSize: 14),
-                            prefixIcon: Icon(Icons.search,
-                                color: Colors.grey[500], size: 22),
-                            suffixIcon: Icon(Icons.qr_code_scanner,
-                                color: Colors.grey[500], size: 22),
-                            border: InputBorder.none,
-                            contentPadding:
-                                const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Filter tabs
-                      Row(
-                        children: [
-                          Expanded(
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: ['ALL', 'ACTIVE', 'INACTIVE', 'RECENT']
-                                    .map((tab) {
-                                  final isSelected = _activeFilter == tab;
-                                  return Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: InkWell(
-                                      onTap: () => setState(
-                                          () => _activeFilter = tab),
-                                      borderRadius:
-                                          BorderRadius.circular(8),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 14, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: isSelected
-                                              ? AppTheme.primary
-                                              : Colors.grey[100],
-                                          border: Border.all(
-                                            color: isSelected
-                                                ? AppTheme.primary
-                                                : Colors.grey[300]!,
-                                          ),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          tab,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.bold,
-                                            color: isSelected
-                                                ? Colors.white
-                                                : AppTheme.textDark,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
+                          // Search Bar
+                          Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: TextField(
+                              onChanged: (val) =>
+                                  setState(() => _searchQuery = val),
+                              style: const TextStyle(fontSize: 15),
+                              decoration: InputDecoration(
+                                hintText: 'Supplier Name / Phone / GST No',
+                                hintStyle: TextStyle(
+                                    color: Colors.grey[500], fontSize: 14),
+                                prefixIcon: Icon(Icons.search,
+                                    color: Colors.grey[500], size: 22),
+                                suffixIcon: Icon(Icons.qr_code_scanner,
+                                    color: Colors.grey[500], size: 22),
+                                border: InputBorder.none,
+                                contentPadding:
+                                    const EdgeInsets.symmetric(vertical: 12),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: AppTheme.primary),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.filter_alt_outlined,
-                                    color: AppTheme.primary, size: 16),
-                                SizedBox(width: 6),
-                                Text('FILTER',
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppTheme.primary)),
-                                Icon(Icons.arrow_drop_down,
-                                    color: AppTheme.primary, size: 16),
-                              ],
-                            ),
+                          const SizedBox(height: 12),
+
+                          // Filter tabs
+                          Row(
+                            children: [
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: ['ALL', 'ACTIVE', 'INACTIVE', 'RECENT']
+                                        .map((tab) {
+                                      final isSelected = _activeFilter == tab;
+                                      return Padding(
+                                        padding: const EdgeInsets.only(right: 8),
+                                        child: InkWell(
+                                          onTap: () => setState(
+                                              () => _activeFilter = tab),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 14, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: isSelected
+                                                  ? AppTheme.primary
+                                                  : Colors.grey[100],
+                                              border: Border.all(
+                                                color: isSelected
+                                                    ? AppTheme.primary
+                                                    : Colors.grey[300]!,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              tab,
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.bold,
+                                                color: isSelected
+                                                    ? Colors.white
+                                                    : AppTheme.textDark,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: AppTheme.primary),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.filter_alt_outlined,
+                                        color: AppTheme.primary, size: 16),
+                                    SizedBox(width: 6),
+                                    Text('FILTER',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppTheme.primary)),
+                                    Icon(Icons.arrow_drop_down,
+                                        color: AppTheme.primary, size: 16),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
+                          const SizedBox(height: 16),
+
+                          // Supplier list
+                          if (filteredSuppliers.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 24),
+                              child: Center(
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.storefront_outlined,
+                                        size: 48, color: Colors.grey[300]),
+                                    const SizedBox(height: 12),
+                                    const Text('No suppliers found',
+                                        style: TextStyle(
+                                            color: Colors.grey,
+                                            fontSize: 14,
+                                            fontStyle: FontStyle.italic)),
+                                  ],
+                                ),
+                              ),
+                            )
+                          else
+                            ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: filteredSuppliers.length,
+                              itemBuilder: (context, idx) {
+                                final s = filteredSuppliers[idx];
+                                return _buildSupplierCard(s);
+                              },
+                            ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-
-                      // Supplier list
-                      if (filteredSuppliers.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 24),
-                          child: Center(
-                            child: Column(
-                              children: [
-                                Icon(Icons.storefront_outlined,
-                                    size: 48, color: Colors.grey[300]),
-                                const SizedBox(height: 12),
-                                const Text('No suppliers found',
-                                    style: TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 14,
-                                        fontStyle: FontStyle.italic)),
-                              ],
-                            ),
-                          ),
-                        )
-                      else
-                        ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: filteredSuppliers.length,
-                          itemBuilder: (context, idx) {
-                            final s = filteredSuppliers[idx];
-                            return _buildSupplierCard(s);
-                          },
-                        ),
-                    ],
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 80),
+                ],
               ),
-              const SizedBox(height: 80),
-            ],
-          ),
-        ),
+            ),
 
-        // ── Add Supplier Overlay ─────────────────────────────────────────────
-        if (_showAddSupplierOverlay) _buildAddSupplierOverlay(),
-      ],
+            // ── Add Supplier Overlay ─────────────────────────────────────────────
+            if (_showAddSupplierOverlay) _buildAddSupplierOverlay(),
+          ],
+        );
+      },
     );
   }
 
@@ -595,10 +497,16 @@ class _SupplierPageState extends State<SupplierPage> {
                       style: TextStyle(
                           color: Colors.grey[500], fontSize: 11)),
                   const SizedBox(height: 6),
-                  Text(
-                    '${s.bills.length} bill${s.bills.length == 1 ? '' : 's'}',
-                    style: TextStyle(
-                        fontSize: 11, color: Colors.grey[500]),
+                  StreamBuilder<List<BillData>>(
+                    stream: SupplierService().getBills(s.id),
+                    builder: (context, snapshot) {
+                      final count = snapshot.data?.length ?? 0;
+                      return Text(
+                        '$count bill${count == 1 ? '' : 's'}',
+                        style: TextStyle(
+                            fontSize: 11, color: Colors.grey[500]),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -644,11 +552,9 @@ class _SupplierPageState extends State<SupplierPage> {
                         child: Switch(
                           value: s.isEnabled,
                           activeThumbColor: AppTheme.primary,
-                          onChanged: (val) {
-                            setState(() {
-                              s.isEnabled = val;
-                              s.status = val ? 'ACTIVE' : 'INACTIVE';
-                            });
+                          onChanged: (val) async {
+                            await SupplierService().updateSupplierStatus(s.id, val, val ? 'ACTIVE' : 'INACTIVE');
+                            CustomerSupplierService().notify();
                           },
                         ),
                       ),
