@@ -4,6 +4,8 @@ import '../../core/core.dart';
 import '../../core/services/order_service.dart';
 import '../../core/services/product_service.dart';
 import '../../core/services/customer_supplier_service.dart';
+import '../../core/services/customer_service.dart';
+import '../../core/models/customer.dart';
 import '../../core/models/order.dart';
 import '../../core/models/product.dart';
 import '../../widgets/home/home_widgets.dart';
@@ -412,149 +414,156 @@ class _HomeBodyState extends State<_HomeBody> {
         return StreamBuilder<List<InventoryItem>>(
           stream: _productsStream,
           builder: (context, productsSnapshot) {
-            return ListenableBuilder(
-              listenable: CustomerSupplierService(),
-              builder: (context, _) {
-                final orders = ordersSnapshot.data ?? [];
-                final products = productsSnapshot.data ?? [];
-                final customers = CustomerSupplierService().customers;
-                final suppliers = CustomerSupplierService().suppliers;
+            return StreamBuilder<List<CustomerData>>(
+              stream: CustomerService().getCustomers(),
+              builder: (context, customersSnapshot) {
+                return StreamBuilder<List<CustomerDueTransaction>>(
+                  stream: CustomerService().getAllTransactionsStream(),
+                  builder: (context, transactionsSnapshot) {
+                    return ListenableBuilder(
+                      listenable: CustomerSupplierService(),
+                      builder: (context, _) {
+                        final orders = ordersSnapshot.data ?? [];
+                        final products = productsSnapshot.data ?? [];
+                        final customers = customersSnapshot.data ?? [];
+                        final customerTxs = transactionsSnapshot.data ?? [];
+                        final suppliers = CustomerSupplierService().suppliers;
 
-                // 1. Calculate Today's Sales
-                final ordersOnSelectedDay = orders.where((o) => _isSameDay(o.date, _selectedDate)).toList();
-                final billingTotal = ordersOnSelectedDay.fold(0.0, (sum, o) => sum + o.total);
+                        // 1. Calculate Today's Sales
+                        final ordersOnSelectedDay = orders.where((o) => _isSameDay(o.date, _selectedDate)).toList();
+                        final billingTotal = ordersOnSelectedDay.fold(0.0, (sum, o) => sum + o.total);
 
-                double customerDuesToday = 0.0;
-                for (final c in customers) {
-                  for (final tx in c.transactions) {
-                    if (_isTransactionOnDay(tx.date, _selectedDate) && !tx.isPayment) {
-                      customerDuesToday += tx.amount;
-                    }
-                  }
-                }
+                        double customerDuesToday = 0.0;
+                        for (final tx in customerTxs) {
+                          if (_isSameDay(tx.date, _selectedDate) && !tx.isPayment) {
+                            customerDuesToday += tx.amount;
+                          }
+                        }
 
-                double supplierDuesToday = 0.0;
-                for (final s in suppliers) {
-                  for (final tx in s.transactions) {
-                    if (_isTransactionOnDay(tx.date, _selectedDate) && !tx.isPayment) {
-                      supplierDuesToday += tx.amount;
-                    }
-                  }
-                }
+                        double supplierDuesToday = 0.0;
+                        for (final s in suppliers) {
+                          for (final tx in s.transactions) {
+                            if (_isTransactionOnDay(tx.date, _selectedDate) && !tx.isPayment) {
+                              supplierDuesToday += tx.amount;
+                            }
+                          }
+                        }
 
-                final todaySales = billingTotal - customerDuesToday - supplierDuesToday;
+                        final todaySales = billingTotal - customerDuesToday - supplierDuesToday;
 
-                // Calculate yesterday's sales for delta comparison
-                final yesterday = _selectedDate.subtract(const Duration(days: 1));
-                final ordersOnYesterday = orders.where((o) => _isSameDay(o.date, yesterday)).toList();
-                final billingTotalYesterday = ordersOnYesterday.fold(0.0, (sum, o) => sum + o.total);
+                        // Calculate yesterday's sales for delta comparison
+                        final yesterday = _selectedDate.subtract(const Duration(days: 1));
+                        final ordersOnYesterday = orders.where((o) => _isSameDay(o.date, yesterday)).toList();
+                        final billingTotalYesterday = ordersOnYesterday.fold(0.0, (sum, o) => sum + o.total);
 
-                double customerDuesYesterday = 0.0;
-                for (final c in customers) {
-                  for (final tx in c.transactions) {
-                    if (_isTransactionOnDay(tx.date, yesterday) && !tx.isPayment) {
-                      customerDuesYesterday += tx.amount;
-                    }
-                  }
-                }
+                        double customerDuesYesterday = 0.0;
+                        for (final tx in customerTxs) {
+                          if (_isSameDay(tx.date, yesterday) && !tx.isPayment) {
+                            customerDuesYesterday += tx.amount;
+                          }
+                        }
 
-                double supplierDuesYesterday = 0.0;
-                for (final s in suppliers) {
-                  for (final tx in s.transactions) {
-                    if (_isTransactionOnDay(tx.date, yesterday) && !tx.isPayment) {
-                      supplierDuesYesterday += tx.amount;
-                    }
-                  }
-                }
+                        double supplierDuesYesterday = 0.0;
+                        for (final s in suppliers) {
+                          for (final tx in s.transactions) {
+                            if (_isTransactionOnDay(tx.date, yesterday) && !tx.isPayment) {
+                              supplierDuesYesterday += tx.amount;
+                            }
+                          }
+                        }
 
-                final yesterdaySales = billingTotalYesterday - customerDuesYesterday - supplierDuesYesterday;
-                final diff = todaySales - yesterdaySales;
-                
-                double percentDiff = 0.0;
-                if (yesterdaySales != 0) {
-                  percentDiff = (diff / yesterdaySales) * 100;
-                } else if (todaySales != 0) {
-                  percentDiff = todaySales > 0 ? 100.0 : -100.0;
-                }
+                        final yesterdaySales = billingTotalYesterday - customerDuesYesterday - supplierDuesYesterday;
+                        final diff = todaySales - yesterdaySales;
+                        
+                        double percentDiff = 0.0;
+                        if (yesterdaySales != 0) {
+                          percentDiff = (diff / yesterdaySales) * 100;
+                        } else if (todaySales != 0) {
+                          percentDiff = todaySales > 0 ? 100.0 : -100.0;
+                        }
 
-                final String deltaText;
-                if (yesterdaySales == 0 && todaySales == 0) {
-                  deltaText = '0.0% from yesterday';
-                } else {
-                  final sign = percentDiff >= 0 ? '+' : '';
-                  deltaText = '$sign${percentDiff.toStringAsFixed(1)}% from yesterday';
-                }
+                        final String deltaText;
+                        if (yesterdaySales == 0 && todaySales == 0) {
+                          deltaText = '0.0% from yesterday';
+                        } else {
+                          final sign = percentDiff >= 0 ? '+' : '';
+                          deltaText = '$sign${percentDiff.toStringAsFixed(1)}% from yesterday';
+                        }
 
-                // 2. Pending Due (total outstanding you need to get from customers and suppliers)
-                final totalCustomerDue = customers.fold(0.0, (sum, c) => sum + c.netDue);
-                final totalSupplierDue = suppliers.fold(0.0, (sum, s) => sum + s.netDue);
-                final pendingDue = totalCustomerDue + totalSupplierDue;
+                        // 2. Pending Due (total outstanding you need to get from customers and suppliers)
+                        final totalCustomerDue = customers.fold(0.0, (sum, c) => sum + c.netDue);
+                        final totalSupplierDue = suppliers.fold(0.0, (sum, s) => sum + s.netDue);
+                        final pendingDue = totalCustomerDue + totalSupplierDue;
 
-                // 3. Today's orders count
-                final todayOrdersCount = ordersOnSelectedDay.length;
+                        // 3. Today's orders count
+                        final todayOrdersCount = ordersOnSelectedDay.length;
 
-                // 4. Out of stock items count (stock == 0)
-                final outOfStockCount = products.where((p) => p.stock == 0).length;
+                        // 4. Out of stock items count (stock == 0)
+                        final outOfStockCount = products.where((p) => p.stock == 0).length;
 
-                return SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(hPad, 20, hPad, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 1. Greeting
-                      const HomeGreeting(
-                        greeting: 'Good Morning 👋,',
-                        userName: 'Admin',
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _getFormattedDateAndDay(DateTime.now()),
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textMid,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // 2. Today's Sales Card
-                      TodaysSalesCard(
-                        amount: '₹${todaySales.toStringAsFixed(0)}',
-                        delta: deltaText,
-                        selectedDate: _selectedDate,
-                        onDateChanged: (newDate) {
-                          setState(() {
-                            _selectedDate = newDate;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
-
-                      // 3. Stats Summary Row
-                      _StatsSummaryRow(
-                        pendingDue: pendingDue,
-                        todayOrders: todayOrdersCount,
-                        outOfStockCount: outOfStockCount,
-                        onOutOfStockTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const InventoryPage(
-                                initialStockStatusFilter: 'OUT_OF_STOCK',
+                        return SingleChildScrollView(
+                          padding: EdgeInsets.fromLTRB(hPad, 20, hPad, 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 1. Greeting
+                              const HomeGreeting(
+                                greeting: 'Good Morning 👋,',
+                                userName: 'Admin',
                               ),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 28),
+                              const SizedBox(height: 8),
+                              Text(
+                                _getFormattedDateAndDay(DateTime.now()),
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.textMid,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
 
-                      // 4. Quick Actions
-                      QuickActionsSection(
-                        actions: actions,
-                        onViewAll: () {},
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-                  ),
+                              // 2. Today's Sales Card
+                              TodaysSalesCard(
+                                amount: '₹${todaySales.toStringAsFixed(0)}',
+                                delta: deltaText,
+                                selectedDate: _selectedDate,
+                                onDateChanged: (newDate) {
+                                  setState(() {
+                                    _selectedDate = newDate;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 12),
+
+                              // 3. Stats Summary Row
+                              _StatsSummaryRow(
+                                pendingDue: pendingDue,
+                                todayOrders: todayOrdersCount,
+                                outOfStockCount: outOfStockCount,
+                                onOutOfStockTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => const InventoryPage(
+                                        initialStockStatusFilter: 'OUT_OF_STOCK',
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 28),
+
+                              // 4. Quick Actions
+                              QuickActionsSection(
+                                actions: actions,
+                                onViewAll: () {},
+                              ),
+                              const SizedBox(height: 20),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
                 );
               },
             );
