@@ -10,10 +10,18 @@ class OrderService {
   // 1. Save an order & update inventory stock in a secure atomic transaction
   Future<void> createOrder(OrderData order) async {
     await FirebaseFirestore.instance.runTransaction((transaction) async {
-      // Step A: Read product documents to check stock availability and decrement
+      // Step A: Read all product documents first (all reads must precede writes)
+      final List<DocumentSnapshot> productDocs = [];
       for (final item in order.items) {
         final productDocRef = _productsCollection.doc(item.productId);
         final productDoc = await transaction.get(productDocRef);
+        productDocs.add(productDoc);
+      }
+
+      // Step B: Update product stock inside transaction
+      for (int i = 0; i < order.items.length; i++) {
+        final item = order.items[i];
+        final productDoc = productDocs[i];
 
         if (productDoc.exists) {
           final currentData = productDoc.data() as Map<String, dynamic>? ?? {};
@@ -23,12 +31,11 @@ class OrderService {
           // For now, simple count subtraction:
           final newStock = currentStock - item.quantity;
           
-          // Update product stock inside transaction
-          transaction.update(productDocRef, {'stock': newStock});
+          transaction.update(productDoc.reference, {'stock': newStock});
         }
       }
 
-      // Step B: Write the order document
+      // Step C: Write the order document
       final newOrderRef = _ordersCollection.doc(order.id.isEmpty ? null : order.id);
       transaction.set(newOrderRef, order.toFirestore());
     });
