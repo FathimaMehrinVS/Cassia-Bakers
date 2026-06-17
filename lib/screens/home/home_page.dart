@@ -17,6 +17,7 @@ import '../inventory/inventory_page.dart';
 import '../customer/customer_page.dart';
 import '../staff/staff_page.dart';
 import '../notifications/notification_center_page.dart';
+import '../reports/invoice_history_page.dart';
 import '../../widgets/notification_bell.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -387,6 +388,11 @@ class _HomeBodyState extends State<_HomeBody> {
       QuickActionItem(
         label: 'Reports',
         icon: Icons.analytics_outlined,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (context) => const InvoiceHistoryPage()),
+          );
+        },
       ),
       QuickActionItem(
         label: 'Inventory',

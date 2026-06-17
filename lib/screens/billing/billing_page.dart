@@ -9,8 +9,10 @@ import 'package:printing/printing.dart';
 import '../../core/core.dart';
 import '../../core/models/product.dart';
 import '../../core/models/order.dart';
+import '../../core/models/invoice_record.dart';
 import '../../core/services/product_service.dart';
 import '../../core/services/order_service.dart';
+import '../../core/services/invoice_service.dart';
 import '../../widgets/notification_bell.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -147,12 +149,11 @@ class _BillingPageState extends State<BillingPage> {
   Future<void> _loadCatalog() async {
     try {
       final catalogData = await ProductService().getCatalog();
-      final ordersList = await OrderService().getOrders();
-      final nextBillNum = 1025 + ordersList.length;
+      final nextBillNum = await InvoiceService().getNextBillNumber();
       final now = DateTime.now();
       setState(() {
         _catalog = catalogData;
-        _billNo = '$nextBillNum';
+        _billNo = nextBillNum;
         _billDate = _formatDateOnly(now);
         _billTime = _formatTimeOnly(now);
         _isLoadingCatalog = false;
@@ -1114,13 +1115,21 @@ class _BillingPageState extends State<BillingPage> {
                       label: 'Print',
                       color: const Color(0xFFA22204), // Reddish-brown
                       onPressed: () async {
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (context) => const Center(child: CircularProgressIndicator()),
+                        );
                         try {
-                          final pdfBytes = await _generateInvoicePdf();
+                          final pdfBytes = await _generateAndSaveInvoice();
+                          if (mounted) Navigator.of(context).pop();
                           await Printing.layoutPdf(
                             onLayout: (PdfPageFormat format) async => pdfBytes,
                             name: 'Invoice_$_billNo',
                           );
                         } catch (e) {
+                          if (mounted) Navigator.of(context).pop();
+                          if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text('Failed to print: $e')),
                           );
@@ -1134,13 +1143,21 @@ class _BillingPageState extends State<BillingPage> {
                       label: 'Share\nWhatsapp',
                       color: const Color(0xFF007F0E), // WhatsApp Green
                       onPressed: () async {
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (context) => const Center(child: CircularProgressIndicator()),
+                        );
                         try {
-                          final pdfBytes = await _generateInvoicePdf();
+                          final pdfBytes = await _generateAndSaveInvoice();
+                          if (mounted) Navigator.of(context).pop();
                           await Printing.sharePdf(
                             bytes: pdfBytes,
                             filename: 'invoice_$_billNo.pdf',
                           );
                         } catch (e) {
+                          if (mounted) Navigator.of(context).pop();
+                          if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text('Failed to share: $e')),
                           );
@@ -1154,7 +1171,6 @@ class _BillingPageState extends State<BillingPage> {
                       label: 'Done',
                       color: const Color(0xFF007F80), // Teal
                       onPressed: () async {
-                        // Show loading indicator
                         showDialog(
                           context: context,
                           barrierDismissible: false,
@@ -1187,6 +1203,12 @@ class _BillingPageState extends State<BillingPage> {
                           // Create order in Firestore (which atomically decrements stock)
                           await OrderService().createOrder(newOrder);
 
+                          // Generate and save PDF metadata inside 'invoices' Firestore collection
+                          await _generateAndSaveInvoice();
+
+                          // Generate next unique bill number
+                          final nextBill = await InvoiceService().getNextBillNumber();
+
                           if (mounted) Navigator.of(context).pop(); // close loading indicator
 
                           setState(() {
@@ -1194,6 +1216,10 @@ class _BillingPageState extends State<BillingPage> {
                             _discount = 0.0;
                             _gstOverride = null;
                             _isReceiptExpanded = false;
+                            _billNo = nextBill;
+                            final now = DateTime.now();
+                            _billDate = _formatDateOnly(now);
+                            _billTime = _formatTimeOnly(now);
                           });
 
                           if (!mounted) return;
@@ -1254,6 +1280,35 @@ class _BillingPageState extends State<BillingPage> {
         ),
       ),
     );
+  }
+
+  Future<Uint8List> _generateAndSaveInvoice() async {
+    final pdfBytes = await _generateInvoicePdf();
+    final List<Map<String, dynamic>> itemsList = _cart.values.map((item) {
+      return {
+        'name': item.product.name,
+        'size': item.selectedSize.label,
+        'quantity': item.quantity,
+        'rate': item.selectedSize.price,
+        'amount': item.amount,
+      };
+    }).toList();
+
+    final record = InvoiceRecord(
+      billNo: _billNo,
+      date: _billDate,
+      time: _billTime,
+      subtotal: _subtotal,
+      discount: _discount,
+      gst: _gstTotal,
+      total: _total,
+      pdfUrl: '',
+      createdAt: DateTime.now(),
+      items: itemsList,
+    );
+
+    await InvoiceService().saveInvoice(record, pdfBytes);
+    return pdfBytes;
   }
 
   Future<Uint8List> _generateInvoicePdf() async {
