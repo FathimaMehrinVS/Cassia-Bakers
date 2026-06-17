@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../models/customer.dart';
 import '../../screens/customer/customer_page.dart';
 import '../../screens/supplier/supplier_page.dart';
 
