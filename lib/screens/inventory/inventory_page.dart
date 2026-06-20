@@ -685,7 +685,8 @@ class _InventoryPageState extends State<InventoryPage> {
                     },
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      height: 60,
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
                       decoration: BoxDecoration(
                         color: _selectedStockStatusFilter == 'ALL'
                             ? AppTheme.primary.withOpacity(0.18)
@@ -697,13 +698,14 @@ class _InventoryPageState extends State<InventoryPage> {
                         ),
                       ),
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
                             '$_totalProductsCount',
-                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.primary),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.primary),
                           ),
-                          const SizedBox(height: 4),
-                          const Text('Total Products', style: TextStyle(fontSize: 12, color: AppTheme.textMid, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 2),
+                          const Text('Total Products', style: TextStyle(fontSize: 10, color: AppTheme.textMid, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -720,7 +722,8 @@ class _InventoryPageState extends State<InventoryPage> {
                     },
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      height: 60,
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
                       decoration: BoxDecoration(
                         color: _selectedStockStatusFilter == 'LOW_STOCK'
                             ? Colors.orange[100]
@@ -732,13 +735,14 @@ class _InventoryPageState extends State<InventoryPage> {
                         ),
                       ),
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
                             '$_lowStockCount',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.orange[800]),
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orange[800]),
                           ),
-                          const SizedBox(height: 4),
-                          Text('Low Stock Items', style: TextStyle(fontSize: 12, color: Colors.orange[800], fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 2),
+                          Text('Low Stock', style: TextStyle(fontSize: 10, color: Colors.orange[800]!, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -755,7 +759,8 @@ class _InventoryPageState extends State<InventoryPage> {
                     },
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      height: 60,
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
                       decoration: BoxDecoration(
                         color: _selectedStockStatusFilter == 'OUT_OF_STOCK'
                             ? Colors.red[100]
@@ -767,13 +772,14 @@ class _InventoryPageState extends State<InventoryPage> {
                         ),
                       ),
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
                             '$_outOfStockCount',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red[800]),
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red[800]),
                           ),
-                          const SizedBox(height: 4),
-                          Text('Out of Stock', style: TextStyle(fontSize: 12, color: Colors.red[800], fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 2),
+                          Text('Out of Stock', style: TextStyle(fontSize: 10, color: Colors.red[800]!, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
