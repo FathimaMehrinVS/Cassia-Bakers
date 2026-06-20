@@ -35,16 +35,19 @@ class StatSummaryCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppTheme.textMid,
-                        height: 1.2,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppTheme.textMid,
+                          height: 1.2,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -52,15 +55,18 @@ class StatSummaryCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
-                      child: Text(
-                        value,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.textDark,
-                            ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          value,
+                          maxLines: 1,
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.textDark,
+                              ),
+                        ),
                       ),
                     ),
                     if (icon != null)

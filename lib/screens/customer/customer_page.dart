@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/core.dart';
 import '../../core/models/customer.dart';
 import '../../core/services/customer_service.dart';
@@ -19,19 +20,18 @@ class CustomerPage extends StatefulWidget {
 class _CustomerPageState extends State<CustomerPage> {
   final ScrollController _scrollController = ScrollController();
   final CustomerService _customerService = CustomerService();
+  final Set<String> _selectedCustomerIds = {};
 
   // ── Add Customer Form State ────────────────────────────────────────────────
   bool _showAddCustomerForm = false;
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _initialDueController = TextEditingController();
 
   @override
   void dispose() {
     _scrollController.dispose();
     _nameController.dispose();
     _phoneController.dispose();
-    _initialDueController.dispose();
     super.dispose();
   }
 
@@ -50,7 +50,6 @@ class _CustomerPageState extends State<CustomerPage> {
   Future<void> _saveCustomer() async {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
-    final initialDueVal = double.tryParse(_initialDueController.text) ?? 0.0;
 
     if (name.isEmpty) {
       _showErrorSnackbar('Please enter Customer Name');
@@ -68,7 +67,7 @@ class _CustomerPageState extends State<CustomerPage> {
       name: name,
       phone: phone,
       dateAdded: now,
-      netDue: initialDueVal > 0 ? initialDueVal : 0.0,
+      netDue: 0.0,
     );
 
     try {
@@ -77,7 +76,6 @@ class _CustomerPageState extends State<CustomerPage> {
       setState(() {
         _nameController.clear();
         _phoneController.clear();
-        _initialDueController.clear();
         _showAddCustomerForm = false;
       });
 
@@ -121,7 +119,12 @@ class _CustomerPageState extends State<CustomerPage> {
             // Main Scrollable Area
             SingleChildScrollView(
               controller: _scrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                _selectedCustomerIds.isNotEmpty ? 72 : 16,
+                16,
+                16,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -183,46 +186,74 @@ class _CustomerPageState extends State<CustomerPage> {
                     itemBuilder: (context, idx) {
                       final customer = customers[idx];
                       final hasDue = customer.netDue > 0;
+                      final isSelected = _selectedCustomerIds.contains(customer.id);
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          border: Border.all(color: Colors.grey[300]!, width: 1.5),
+                          color: isSelected ? Colors.green[50] : Colors.grey[100],
+                          border: Border.all(
+                            color: isSelected ? Colors.green[400]! : Colors.grey[300]!,
+                            width: 1.5,
+                          ),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: InkWell(
                           onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => CustomerDetailPage(
-                                  customer: customer,
-                                  onChanged: () {
-                                    setState(() {});
-                                  },
+                            if (_selectedCustomerIds.isNotEmpty) {
+                              setState(() {
+                                if (isSelected) {
+                                  _selectedCustomerIds.remove(customer.id);
+                                } else {
+                                  _selectedCustomerIds.add(customer.id);
+                                }
+                              });
+                            } else {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => CustomerDetailPage(
+                                    customer: customer,
+                                    onChanged: () {
+                                      setState(() {});
+                                    },
+                                  ),
                                 ),
-                              ),
-                            );
+                              );
+                            }
+                          },
+                          onLongPress: () {
+                            HapticFeedback.vibrate();
+                            setState(() {
+                              if (isSelected) {
+                                _selectedCustomerIds.remove(customer.id);
+                              } else {
+                                _selectedCustomerIds.add(customer.id);
+                              }
+                            });
                           },
                           borderRadius: BorderRadius.circular(12),
                           child: Padding(
                             padding: const EdgeInsets.all(12.0),
                             child: Row(
                               children: [
-                                // Pic circle placeholder
+                                // Pic circle placeholder or checkmark
                                 Container(
                                   width: 50,
                                   height: 50,
                                   decoration: BoxDecoration(
-                                    color: Colors.grey[300],
-                                    border: Border.all(color: Colors.grey[400]!),
+                                    color: isSelected ? Colors.green[100] : Colors.grey[300],
+                                    border: Border.all(
+                                      color: isSelected ? Colors.green[300]! : Colors.grey[400]!,
+                                    ),
                                     shape: BoxShape.circle,
                                   ),
                                   alignment: Alignment.center,
-                                  child: const Text(
-                                    '[pic]',
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
-                                  ),
+                                  child: isSelected
+                                      ? const Icon(Icons.check, color: Colors.green, size: 24)
+                                      : const Text(
+                                          '[pic]',
+                                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                                        ),
                                 ),
                                 const SizedBox(width: 16),
                                 // Text details
@@ -287,7 +318,7 @@ class _CustomerPageState extends State<CustomerPage> {
               _buildAddCustomerOverlay(),
 
             // ── 4. Add Customer Rectangular FAB ──
-            if (!_showAddCustomerForm)
+            if (!_showAddCustomerForm && _selectedCustomerIds.isEmpty)
               Positioned(
                 bottom: 16,
                 right: 16,
@@ -320,6 +351,50 @@ class _CustomerPageState extends State<CustomerPage> {
                   ),
                 ),
               ),
+
+            // ── Contextual Selection Toolbar ──
+            if (_selectedCustomerIds.isNotEmpty)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: Colors.green[800],
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                    ],
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () {
+                          setState(() {
+                            _selectedCustomerIds.clear();
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${_selectedCustomerIds.length} Selected',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.white),
+                        onPressed: () => _confirmDeleteCustomers(context),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         );
       },
@@ -328,7 +403,8 @@ class _CustomerPageState extends State<CustomerPage> {
 
   Widget _buildAddCustomerOverlay() {
     final screenHeight = MediaQuery.of(context).size.height;
-    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    final topPadding = MediaQuery.of(context).padding.top;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Positioned.fill(
       child: GestureDetector(
@@ -341,164 +417,136 @@ class _CustomerPageState extends State<CustomerPage> {
             onTap: () {},
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                maxHeight: screenHeight * 0.62,
+                maxHeight: (screenHeight - topPadding - 56) * 0.85,
               ),
               child: Container(
-                width: double.infinity,
-                padding: EdgeInsets.fromLTRB(16, 16, 16, keyboardHeight > 0 ? keyboardHeight + 16 : 16),
+                width: AppTheme.isWideScreen(context) ? 500 : double.infinity,
+                padding: EdgeInsets.fromLTRB(
+                  16, 16, 16,
+                  bottomPadding + 16,
+                ),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── Header (never scrolls) ──
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Add New Customer',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: AppTheme.primary,
+                child: SingleChildScrollView(
+                  primary: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Header ──
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Add New Customer',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: AppTheme.primary,
+                            ),
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => setState(
-                            () => _showAddCustomerForm = false,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Divider(),
-                    const SizedBox(height: 8),
-
-                    // ── Scrollable fields (only if needed) ──
-                    Flexible(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text(
-                              'Customer Name *',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            TextField(
-                              controller: _nameController,
-                              decoration: const InputDecoration(
-                                hintText: 'Enter customer name',
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 12,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'Customer Phone Number *',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            TextField(
-                              controller: _phoneController,
-                              keyboardType: TextInputType.phone,
-                              decoration: const InputDecoration(
-                                hintText: 'Enter customer phone number',
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 12,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'Initial Due Amount (Optional)',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            TextField(
-                              controller: _initialDueController,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                hintText: 'Enter initial due (if any)',
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 12,
-                                ),
-                                prefixText: '₹ ',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // ── Buttons (always visible, never scrolls) ──
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: AppTheme.primary),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              minimumSize: const Size(0, 48),
-                            ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
                             onPressed: () => setState(
                               () => _showAddCustomerForm = false,
                             ),
-                            child: const Text(
-                              'CANCEL',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.primary,
+                          ),
+                        ],
+                      ),
+                      const Divider(),
+                      const SizedBox(height: 8),
+
+                      const Text(
+                        'Customer Name *',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(
+                          hintText: 'Enter customer name',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Customer Phone Number *',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          hintText: 'Enter customer phone number',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // ── Buttons ──
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: AppTheme.primary),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                minimumSize: const Size(0, 48),
+                              ),
+                              onPressed: () => setState(
+                                () => _showAddCustomerForm = false,
+                              ),
+                              child: const Text(
+                                'CANCEL',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.primary,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                minimumSize: const Size(0, 48),
+                                elevation: 0,
                               ),
-                              minimumSize: const Size(0, 48),
-                              elevation: 0,
-                            ),
-                            onPressed: _saveCustomer,
-                            child: const Text(
-                              'SAVE CUSTOMER',
-                              style: TextStyle(fontWeight: FontWeight.bold),
+                              onPressed: _saveCustomer,
+                              child: const Text(
+                                'SAVE CUSTOMER',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -506,5 +554,57 @@ class _CustomerPageState extends State<CustomerPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDeleteCustomers(BuildContext ctx) async {
+    final count = _selectedCustomerIds.length;
+    final confirmed = await showDialog<bool>(
+      context: ctx,
+      builder: (dCtx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.red),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'Delete $count ${count == 1 ? 'Customer' : 'Customers'}?',
+                style: const TextStyle(fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete ${count == 1 ? 'this customer' : 'these customers'}? '
+          'This will permanently delete all associated ledger transactions.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('DELETE'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        final idsToDelete = List<String>.from(_selectedCustomerIds);
+        for (final id in idsToDelete) {
+          await _customerService.deleteCustomer(id);
+        }
+        setState(() {
+          _selectedCustomerIds.clear();
+        });
+        CustomerSupplierService().notify();
+        _showSuccessSnackbar('Deleted customer(s) successfully!');
+      } catch (e) {
+        _showErrorSnackbar('Failed to delete customer(s): $e');
+      }
+    }
   }
 }

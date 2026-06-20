@@ -611,12 +611,18 @@ class _InventoryPageState extends State<InventoryPage> {
               child: Divider(height: 1, thickness: 1, color: AppTheme.divider),
             ),
           ),
-          body: SingleChildScrollView(
-            controller: _scrollController,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          body: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppTheme.getResponsivePadding(context),
+                    vertical: 16,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
             // ── 1. Search Bar ────────────────────────────────────────────────
             Row(
               children: [
@@ -993,94 +999,6 @@ class _InventoryPageState extends State<InventoryPage> {
                   );
                 },
               ),
-            const SizedBox(height: 20),
-
-            // ── 6. Sticky Bottom Buttons & Total card ───────────────────────
-            Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppTheme.primary, width: 2),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      minimumSize: const Size(0, 48),
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _showAddCategoryForm = !_showAddCategoryForm;
-                      });
-                      _scrollToBottom(true);
-                    },
-                    child: const Text(
-                      '+ ADD CATEGORY',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primary),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 4,
-                  child: Container(
-                    height: 48,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.grey[300]!),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.monetization_on_outlined, color: AppTheme.primary, size: 18),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('TOTAL STOCK VALUE', style: TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
-                              Text(
-                                '₹ ${_totalStockValue.toStringAsFixed(2)}',
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.primary),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 3,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      minimumSize: const Size(0, 48),
-                      elevation: 0,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _showAddItemForm = !_showAddItemForm;
-                        if (_showAddItemForm) {
-                          _resetProductId();
-                        }
-                      });
-                      _scrollToBottom(true);
-                    },
-                    child: const Text(
-                      '+ ADD ITEM',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ],
-            ),
 
             // ── 7. ADD NEW CATEGORY Form ─────────────────────────────────────
             if (_showAddCategoryForm) ...[
@@ -1141,7 +1059,9 @@ class _InventoryPageState extends State<InventoryPage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('ADD NEW ITEM', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.primary)),
+                          Expanded(
+                            child: const Text('ADD NEW ITEM', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.primary)),
+                          ),
                           Row(
                             children: [
                               const Text('Active ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey)),
@@ -1403,7 +1323,9 @@ class _InventoryPageState extends State<InventoryPage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Custom Sizes / Units (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                          Expanded(
+                            child: const Text('Custom Sizes / Units (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                          ),
                           TextButton.icon(
                             icon: const Icon(Icons.add, size: 18),
                             label: const Text('Add Option'),
@@ -1554,7 +1476,113 @@ class _InventoryPageState extends State<InventoryPage> {
           ],
         ),
       ),
-    );
+    ),
+              // Sticky Bottom Panel
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    top: BorderSide(color: AppTheme.divider, width: 1.0),
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 4,
+                      offset: Offset(0, -2),
+                    ),
+                  ],
+                ),
+                padding: EdgeInsets.fromLTRB(
+                  AppTheme.getResponsivePadding(context),
+                  12,
+                  AppTheme.getResponsivePadding(context),
+                  12 + MediaQuery.paddingOf(context).bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: AppTheme.primary, width: 2),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              minimumSize: const Size(0, 48),
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _showAddCategoryForm = !_showAddCategoryForm;
+                              });
+                              _scrollToBottom(true);
+                            },
+                            child: const Text(
+                              '+ ADD CATEGORY',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primary),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primary,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              minimumSize: const Size(0, 48),
+                              elevation: 0,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _showAddItemForm = !_showAddItemForm;
+                                if (_showAddItemForm) {
+                                  _resetProductId();
+                                }
+                              });
+                              _scrollToBottom(true);
+                            },
+                            child: const Text(
+                              '+ ADD ITEM',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      height: 48,
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.monetization_on_outlined, color: AppTheme.primary, size: 20),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'TOTAL STOCK VALUE: ',
+                            style: TextStyle(fontSize: 11, color: AppTheme.textMid, fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            '₹ ${_totalStockValue.toStringAsFixed(2)}',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.primary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
       },
     );
   }
@@ -1633,8 +1661,10 @@ class _InventoryPageState extends State<InventoryPage> {
                 ),
               const SizedBox(height: 8),
               // Simulator helper controls
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
                 children: [
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
@@ -1645,7 +1675,6 @@ class _InventoryPageState extends State<InventoryPage> {
                     onPressed: () => _simulateImageCapture('simulated_camera_photo.jpg'),
                     child: const Text('Simulate Camera Capture', style: TextStyle(fontSize: 10)),
                   ),
-                  const SizedBox(width: 8),
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       minimumSize: Size.zero,

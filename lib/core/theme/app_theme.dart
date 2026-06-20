@@ -68,4 +68,20 @@ class AppTheme {
       unselectedLabelStyle: TextStyle(fontSize: 11),
     ),
   );
+
+  // ── Responsive Breakpoints & Helpers ────────────────────────────────────────
+  static const double kMobileBreakpoint = 600.0;
+  static const double kTabletBreakpoint = 850.0;
+
+  static bool isWideScreen(BuildContext context) {
+    return MediaQuery.sizeOf(context).width >= kMobileBreakpoint;
+  }
+
+  static double getResponsivePadding(BuildContext context, {double maxContentWidth = 600.0}) {
+    final screenW = MediaQuery.sizeOf(context).width;
+    if (screenW > maxContentWidth) {
+      return (screenW - maxContentWidth) / 2 + 16.0;
+    }
+    return 16.0;
+  }
 }

@@ -54,10 +54,10 @@ class QuickActionsSection extends StatelessWidget {
 
         const SizedBox(height: 16),
 
-        // ── 3-column responsive grid ──────────────────────────────────────────
+        // ── Dynamic column responsive grid ────────────────────────────────────
         LayoutBuilder(
           builder: (context, constraints) {
-            const columns   = 3;
+            final columns   = constraints.maxWidth > 800 ? 6 : (constraints.maxWidth > 500 ? 4 : 3);
             const spacing   = 12.0;
             final itemWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
 

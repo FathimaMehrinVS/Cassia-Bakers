@@ -89,4 +89,19 @@ class SupplierService {
       'netDue': FieldValue.increment(delta),
     });
   }
+
+  // Delete supplier, their transactions, and bills
+  Future<void> deleteSupplier(String supplierId) async {
+    final txs = await _suppliers.doc(supplierId).collection('transactions').get();
+    final bills = await _suppliers.doc(supplierId).collection('bills').get();
+    final batch = _db.batch();
+    for (final doc in txs.docs) {
+      batch.delete(doc.reference);
+    }
+    for (final doc in bills.docs) {
+      batch.delete(doc.reference);
+    }
+    batch.delete(_suppliers.doc(supplierId));
+    await batch.commit();
+  }
 }

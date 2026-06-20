@@ -418,12 +418,385 @@ class _BillingPageState extends State<BillingPage> {
     }
   }
 
+  Widget _buildSideReceiptView() {
+    return Card(
+      margin: const EdgeInsets.all(16),
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey[200]!, width: 1.5),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // Receipt header layout (Cassia Bakers)
+            const Center(
+              child: Column(
+                children: [
+                  Text(
+                    'Cassia Bakers',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'The Art of Baking - Aluva, Kerala',
+                    style: TextStyle(fontSize: 12, color: AppTheme.textMid),
+                  ),
+                ],
+               ),
+            ),
+            const SizedBox(height: 12),
+            // Metadata rows
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Bill No : $_billNo',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textDark),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Date : $_billDate',
+                      style: const TextStyle(fontSize: 11, color: AppTheme.textDark),
+                    ),
+                    Text(
+                      'Time : $_billTime',
+                      style: const TextStyle(fontSize: 11, color: AppTheme.textDark),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Divider(thickness: 1.5, color: Colors.black87),
+            // Receipt Items Table
+            Expanded(
+              child: _cart.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'Cart is empty',
+                        style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+                      ),
+                    )
+                  : ListView(
+                      children: [
+                        // Table Header
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 4,
+                                child: Text(
+                                  'Item',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textDark),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  'Qty',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textDark),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  'Rate',
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textDark),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  'Amt',
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textDark),
+                                ),
+                              ),
+                              SizedBox(width: 28),
+                            ],
+                          ),
+                        ),
+                        const Divider(thickness: 1, color: AppTheme.divider),
+                        ..._cart.values.map((item) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  flex: 4,
+                                  child: Text(
+                                    '${item.product.name} (${item.selectedSize.label})',
+                                    style: const TextStyle(fontSize: 13, color: AppTheme.textDark, fontWeight: FontWeight.w500),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 2,
+                                  child: Text(
+                                    '${item.quantity}',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(fontSize: 13, color: AppTheme.textDark),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 2,
+                                  child: Text(
+                                    item.selectedSize.price.toStringAsFixed(0),
+                                    textAlign: TextAlign.right,
+                                    style: const TextStyle(fontSize: 13, color: AppTheme.textDark),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 2,
+                                  child: Text(
+                                    item.amount.toStringAsFixed(0),
+                                    textAlign: TextAlign.right,
+                                    style: const TextStyle(fontSize: 13, color: AppTheme.textDark, fontWeight: FontWeight.w500),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: Icon(Icons.delete_forever_outlined, color: Colors.red[800], size: 18),
+                                  onPressed: () {
+                                    setState(() {
+                                      final key = '${item.product.id}_${item.selectedSize.label}';
+                                      _cart.remove(key);
+                                    });
+                                  },
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+            ),
+            const Divider(thickness: 1.5, color: Colors.black87),
+            // Calculations Summary
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Subtotal', style: TextStyle(fontSize: 13, color: AppTheme.textDark)),
+                  Text(_subtotal.toStringAsFixed(0), style: const TextStyle(fontSize: 13, color: AppTheme.textDark)),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Text('Discount', style: TextStyle(fontSize: 13, color: AppTheme.textDark)),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: _editDiscount,
+                        child: const Icon(Icons.edit, size: 14, color: Colors.purple),
+                      ),
+                    ],
+                  ),
+                  Text(_discount.toStringAsFixed(0), style: const TextStyle(fontSize: 13, color: AppTheme.textDark)),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Text('GST (5%)', style: TextStyle(fontSize: 13, color: AppTheme.textDark)),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: _editGst,
+                        child: const Icon(Icons.edit, size: 14, color: Colors.purple),
+                      ),
+                    ],
+                  ),
+                  Text(_gstTotal.toStringAsFixed(0), style: const TextStyle(fontSize: 13, color: AppTheme.textDark)),
+                ],
+              ),
+            ),
+            const Divider(thickness: 1.5, color: Colors.black87),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'TOTAL',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textDark),
+                  ),
+                  Text(
+                    _total.toStringAsFixed(0),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textDark),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Actions
+            Row(
+              children: [
+                Expanded(
+                  child: _buildReceiptActionButton(
+                    label: 'Print',
+                    color: const Color(0xFFA22204),
+                    onPressed: () async {
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => const Center(child: CircularProgressIndicator()),
+                      );
+                      try {
+                        final pdfBytes = await _generateInvoicePdf();
+                        if (mounted) Navigator.of(context).pop();
+                        await Printing.layoutPdf(
+                          onLayout: (PdfPageFormat format) async => pdfBytes,
+                          name: 'Invoice_$_billNo',
+                        );
+                      } catch (e) {
+                        if (mounted) Navigator.of(context).pop();
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to print: $e')),
+                        );
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _buildReceiptActionButton(
+                    label: 'Share\nWhatsapp',
+                    color: const Color(0xFF007F0E),
+                    onPressed: () async {
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => const Center(child: CircularProgressIndicator()),
+                      );
+                      try {
+                        final pdfBytes = await _generateInvoicePdf();
+                        if (mounted) Navigator.of(context).pop();
+                        await Printing.sharePdf(
+                          bytes: pdfBytes,
+                          filename: 'invoice_$_billNo.pdf',
+                        );
+                      } catch (e) {
+                        if (mounted) Navigator.of(context).pop();
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to share: $e')),
+                        );
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _buildReceiptActionButton(
+                    label: 'Done',
+                    color: const Color(0xFF007F80),
+                    onPressed: () async {
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => const Center(child: CircularProgressIndicator()),
+                      );
+                      try {
+                        final List<CartItemData> orderItems = _cart.values.map((item) {
+                          return CartItemData(
+                            productId: item.product.id,
+                            name: item.product.name,
+                            selectedSize: item.selectedSize.label,
+                            quantity: item.quantity,
+                            price: item.selectedSize.price,
+                          );
+                        }).toList();
+
+                        final newOrder = OrderData(
+                          id: 'order_${DateTime.now().millisecondsSinceEpoch}',
+                          billNo: _billNo,
+                          date: DateTime.now(),
+                          subtotal: _subtotal,
+                          discount: _discount,
+                          gstTotal: _gstTotal,
+                          total: _total,
+                          paymentMethod: 'Cash',
+                          items: orderItems,
+                        );
+
+                        await OrderService().createOrder(newOrder);
+
+                        bool invoiceSaved = true;
+                        try {
+                          await _generateAndSaveInvoice();
+                        } catch (e) {
+                          invoiceSaved = false;
+                        }
+
+                        final nextBill = await InvoiceService().getNextBillNumber();
+                        if (mounted) Navigator.of(context).pop();
+
+                        setState(() {
+                          _cart.clear();
+                          _discount = 0.0;
+                          _gstOverride = null;
+                          _billNo = nextBill;
+                          final now = DateTime.now();
+                          _billDate = _formatDateOnly(now);
+                          _billTime = _formatTimeOnly(now);
+                        });
+
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              invoiceSaved
+                                  ? 'Order saved successfully!'
+                                  : 'Order saved, but PDF storage error.',
+                            ),
+                            backgroundColor: invoiceSaved ? AppTheme.primary : Colors.orange[800],
+                          ),
+                        );
+                      } catch (e) {
+                        if (mounted) Navigator.of(context).pop();
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Checkout failed: $e')),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Build Method ───────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     // Accessibility layout constraints: Adapt sizes for better screen legibility.
     final screenW = MediaQuery.sizeOf(context).width;
-    final contentW = screenW > 600 ? 540.0 : screenW;
+    final isSplit = screenW >= 850;
 
     // Filter catalog items
     final filteredCatalog = _catalog.where((product) {
@@ -434,6 +807,153 @@ class _BillingPageState extends State<BillingPage> {
           product.id.toLowerCase().contains(query);
       return matchesCategory && matchesSearch;
     }).toList();
+
+    final catalogColumn = Column(
+      children: [
+        // 1. Search Bar & Barcode button
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 52, // Bounded target height (Age 40-60 friendly)
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (val) => setState(() => _searchQuery = val),
+                    style: const TextStyle(fontSize: 16, color: AppTheme.textDark),
+                    decoration: InputDecoration(
+                      hintText: 'Search Name, Barcode, or Product ID',
+                      hintStyle: TextStyle(color: Colors.grey[600], fontSize: 15),
+                      prefixIcon: Icon(Icons.search, color: Colors.grey[600], size: 24),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Large visual barcode icon button (min 48px hit area)
+              InkWell(
+                onTap: _openBarcodeScanner,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!, width: 1.5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const BarcodeIcon(),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // 2. Horizontally scrollable Category Capsules (Generous Padding)
+        SizedBox(
+          height: 44,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            children: _categories.map((category) {
+              final isSelected = _selectedCategory == category;
+              return Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: InkWell(
+                  onTap: () => setState(() => _selectedCategory = category),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: isSelected ? AppTheme.primary : Colors.grey[200],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      category,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: isSelected ? Colors.white : AppTheme.textDark,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // 3. Scrollable Catalog list
+        Expanded(
+          child: _isLoadingCatalog
+              ? const Center(child: CircularProgressIndicator())
+              : filteredCatalog.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Text(
+                          'No items match your search.',
+                          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      itemCount: filteredCatalog.length,
+                      itemBuilder: (context, index) {
+                        final product = filteredCatalog[index];
+                        // Read active sizes / quantities from cart
+                        final selectedSize = _selectedCatalogSizes[product.id] ??
+                            (product.sizes.length > 1 ? product.sizes[1] : product.sizes[0]);
+                        final key = '${product.id}_${selectedSize.label}';
+                        final cartItem = _cart[key];
+                        final quantity = cartItem?.quantity ?? 0;
+
+                        return _buildCatalogItemCard(product, selectedSize, quantity);
+                      },
+                    ),
+        ),
+
+        // Leave layout space for the bottom expandable sheet
+        if (!isSplit && _cart.isNotEmpty && !_isReceiptExpanded)
+          SizedBox(height: 72 + MediaQuery.paddingOf(context).bottom),
+      ],
+    );
+
+    Widget bodyWidget;
+    if (isSplit) {
+      bodyWidget = Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            flex: 3,
+            child: catalogColumn,
+          ),
+          const VerticalDivider(width: 1, thickness: 1, color: AppTheme.divider),
+          Expanded(
+            flex: 2,
+            child: _buildSideReceiptView(),
+          ),
+        ],
+      );
+    } else {
+      bodyWidget = Center(
+        child: SizedBox(
+          width: screenW > 600 ? 540.0 : screenW,
+          child: catalogColumn,
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -458,135 +978,10 @@ class _BillingPageState extends State<BillingPage> {
       ),
 
       // ── Main Content Body ──────────────────────────────────────────────────
-      body: Center(
-        child: SizedBox(
-          width: contentW,
-          child: Column(
-            children: [
-              // 1. Search Bar & Barcode button
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        height: 52, // Bounded target height (Age 40-60 friendly)
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: (val) => setState(() => _searchQuery = val),
-                          style: const TextStyle(fontSize: 16, color: AppTheme.textDark),
-                          decoration: InputDecoration(
-                            hintText: 'Search Name, Barcode, or Product ID',
-                            hintStyle: TextStyle(color: Colors.grey[600], fontSize: 15),
-                            prefixIcon: Icon(Icons.search, color: Colors.grey[600], size: 24),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Large visual barcode icon button (min 48px hit area)
-                    InkWell(
-                      onTap: _openBarcodeScanner,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        width: 52,
-                        height: 52,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey[300]!, width: 1.5),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const BarcodeIcon(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // 2. Horizontally scrollable Category Capsules (Generous Padding)
-              SizedBox(
-                height: 44,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: _categories.map((category) {
-                    final isSelected = _selectedCategory == category;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: InkWell(
-                        onTap: () => setState(() => _selectedCategory = category),
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppTheme.primary : Colors.grey[200],
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            category,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: isSelected ? Colors.white : AppTheme.textDark,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // 3. Scrollable Catalog list
-              Expanded(
-                child: _isLoadingCatalog
-                    ? const Center(child: CircularProgressIndicator())
-                    : filteredCatalog.isEmpty
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24.0),
-                              child: Text(
-                                'No items match your search.',
-                                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                              ),
-                            ),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            itemCount: filteredCatalog.length,
-                            itemBuilder: (context, index) {
-                              final product = filteredCatalog[index];
-                              // Read active sizes / quantities from cart
-                              final selectedSize = _selectedCatalogSizes[product.id] ??
-                                  (product.sizes.length > 1 ? product.sizes[1] : product.sizes[0]);
-                              final key = '${product.id}_${selectedSize.label}';
-                              final cartItem = _cart[key];
-                              final quantity = cartItem?.quantity ?? 0;
-
-                              return _buildCatalogItemCard(product, selectedSize, quantity);
-                            },
-                          ),
-              ),
-
-              // Leave layout space for the bottom expandable sheet
-              if (_cart.isNotEmpty && !_isReceiptExpanded)
-                SizedBox(height: 72 + MediaQuery.paddingOf(context).bottom),
-            ],
-          ),
-        ),
-      ),
+      body: bodyWidget,
 
       // ── Bottom Sheet & Actions Integration ────────────────────────────────
-      bottomSheet: _cart.isEmpty
+      bottomSheet: isSplit || _cart.isEmpty
           ? null
           : AnimatedContainer(
               duration: const Duration(milliseconds: 300),
@@ -618,8 +1013,8 @@ class _BillingPageState extends State<BillingPage> {
                   builder: (context, constraints) {
                     final isExpanded = constraints.maxHeight > 240;
                     return isExpanded
-                        ? _buildExpandedReceiptView(contentW)
-                        : _buildCollapsedSummaryView(contentW);
+                        ? _buildExpandedReceiptView(screenW > 600 ? 540.0 : screenW)
+                        : _buildCollapsedSummaryView(screenW > 600 ? 540.0 : screenW);
                   },
                 ),
               ),
@@ -917,11 +1312,20 @@ class _BillingPageState extends State<BillingPage> {
             children: [
               Text(
                 'Bill No : $_billNo',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textDark),
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textDark),
               ),
-              Text(
-                'Date : $_billDate   Time : $_billTime',
-                style: const TextStyle(fontSize: 14, color: AppTheme.textDark),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Date : $_billDate',
+                    style: const TextStyle(fontSize: 11, color: AppTheme.textDark),
+                  ),
+                  Text(
+                    'Time : $_billTime',
+                    style: const TextStyle(fontSize: 11, color: AppTheme.textDark),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1593,7 +1997,7 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> with Single
       insetPadding: const EdgeInsets.all(16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
-        height: 560,
+        height: 420,
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
@@ -1721,64 +2125,6 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> with Single
               ),
             ),
 
-            const SizedBox(height: 16),
-
-            // Demo/Developer testing controls (Simulation Mode)
-            const Text(
-              'No physical barcode? Try Simulation:',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.textMid),
-            ),
-            const SizedBox(height: 8),
-
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: [
-                ...widget.catalog.take(2).map((product) {
-                  return ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[200],
-                      foregroundColor: AppTheme.textDark,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: Colors.grey[350]!),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).pop(product.barcode);
-                    },
-                    child: Text(
-                      'Sim Barcode: ${product.name}',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                  );
-                }),
-                ...widget.catalog.take(2).map((product) {
-                  return ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue[50],
-                      foregroundColor: Colors.blue[800],
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: Colors.blue[200]!),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).pop(product.id);
-                    },
-                    child: Text(
-                      'Sim ID: ${product.id}',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                  );
-                }),
-              ],
-            ),
           ],
         ),
       ),

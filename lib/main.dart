@@ -14,10 +14,12 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Lock to portrait mode for phone-first design.
+  // Allow all orientations for responsive design.
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
   ]);
 
   // Use edge-to-edge rendering (status bar overlays content).
@@ -42,6 +44,18 @@ class CassiaBakeryApp extends StatelessWidget {
       title         : 'Cassia Bakery ERP',
       debugShowCheckedModeBanner: false,
       theme         : AppTheme.light,
+      builder: (context, child) {
+        final mediaQueryData = MediaQuery.of(context);
+        return MediaQuery(
+          data: mediaQueryData.copyWith(
+            textScaler: mediaQueryData.textScaler.clamp(
+              minScaleFactor: 0.9,
+              maxScaleFactor: 1.2,
+            ),
+          ),
+          child: child!,
+        );
+      },
       home          : const HomePage(),
     );
   }

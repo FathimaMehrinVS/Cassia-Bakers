@@ -63,4 +63,15 @@ class CustomerService {
       'netDue': FieldValue.increment(delta),
     });
   }
+
+  // Delete customer and their transactions
+  Future<void> deleteCustomer(String customerId) async {
+    final txs = await _customers.doc(customerId).collection('transactions').get();
+    final batch = _db.batch();
+    for (final doc in txs.docs) {
+      batch.delete(doc.reference);
+    }
+    batch.delete(_customers.doc(customerId));
+    await batch.commit();
+  }
 }

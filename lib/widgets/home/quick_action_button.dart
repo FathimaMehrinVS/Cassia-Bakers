@@ -40,15 +40,18 @@ class QuickActionButton extends StatelessWidget {
                 color: AppTheme.primary,
               ),
               const SizedBox(height: 8),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontSize        : 16,
-                      fontWeight      : FontWeight.w600,
-                      color           : AppTheme.textDark,
-                      letterSpacing   : 0.1,
-                    ),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontSize        : 15,
+                        fontWeight      : FontWeight.w600,
+                        color           : AppTheme.textDark,
+                        letterSpacing   : 0.1,
+                      ),
+                ),
               ),
             ],
           ),

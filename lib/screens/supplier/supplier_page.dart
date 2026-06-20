@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/core.dart';
 import '../../core/models/supplier.dart';
 import '../../core/services/supplier_service.dart';
@@ -19,20 +20,19 @@ class SupplierPage extends StatefulWidget {
 class _SupplierPageState extends State<SupplierPage> {
   String _searchQuery = '';
   String _activeFilter = 'ALL'; // 'ALL', 'ACTIVE', 'INACTIVE', 'RECENT'
+  final Set<String> _selectedSupplierIds = {};
 
   // ── Add Supplier Overlay state ─────────────────────────────────────────────
   bool _showAddSupplierOverlay = false;
   final _addNameController = TextEditingController();
   final _addPhoneController = TextEditingController();
   final _addGstinController = TextEditingController();
-  final _addInitialDueController = TextEditingController();
 
   @override
   void dispose() {
     _addNameController.dispose();
     _addPhoneController.dispose();
     _addGstinController.dispose();
-    _addInitialDueController.dispose();
     super.dispose();
   }
 
@@ -70,7 +70,6 @@ class _SupplierPageState extends State<SupplierPage> {
     final gstin = _addGstinController.text.trim().isEmpty
         ? 'N/A'
         : _addGstinController.text.trim();
-    final initialDue = double.tryParse(_addInitialDueController.text) ?? 0.0;
 
     final id = 'supplier_${DateTime.now().millisecondsSinceEpoch}';
     final newSupplier = SupplierData(
@@ -80,32 +79,16 @@ class _SupplierPageState extends State<SupplierPage> {
       gstin: gstin,
       status: 'ACTIVE',
       isEnabled: true,
-      netDue: initialDue,
+      netDue: 0.0,
     );
 
     try {
       await SupplierService().addSupplier(newSupplier);
 
-      if (initialDue > 0) {
-        final now = DateTime.now();
-
-        await SupplierService().addTransaction(
-          id,
-          SupplierTransaction(
-            id: '',
-            description: 'Opening balance',
-            date: now,
-            amount: initialDue,
-            isPayment: false,
-          ),
-        );
-      }
-
       setState(() {
         _addNameController.clear();
         _addPhoneController.clear();
         _addGstinController.clear();
-        _addInitialDueController.clear();
         _showAddSupplierOverlay = false;
       });
 
@@ -146,7 +129,12 @@ class _SupplierPageState extends State<SupplierPage> {
         return Stack(
           children: [
             SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                _selectedSupplierIds.isNotEmpty ? 72 : 16,
+                16,
+                16,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -197,7 +185,34 @@ class _SupplierPageState extends State<SupplierPage> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
+
+                  // ── Add Supplier Button ───────────────────────────────────────
+                  if (_selectedSupplierIds.isEmpty) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          elevation: 0,
+                        ),
+                        onPressed: () =>
+                            setState(() => _showAddSupplierOverlay = true),
+                        icon: const Icon(Icons.person_add, size: 20),
+                        label: const Text(
+                          'Add Supplier',
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
 
                   // ── Directory Card ─────────────────────────────────────────────
                   Card(
@@ -212,36 +227,12 @@ class _SupplierPageState extends State<SupplierPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'Supplier Directory',
-                                style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.textDark),
-                              ),
-                              // Add Supplier button
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.primary,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10)),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 8),
-                                  elevation: 0,
-                                ),
-                                onPressed: () =>
-                                    setState(() => _showAddSupplierOverlay = true),
-                                icon: const Icon(Icons.person_add, size: 18),
-                                label: const Text('Add Supplier',
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold)),
-                              ),
-                            ],
+                          const Text(
+                            'Supplier Directory',
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textDark),
                           ),
                           const SizedBox(height: 14),
 
@@ -389,6 +380,50 @@ class _SupplierPageState extends State<SupplierPage> {
 
             // ── Add Supplier Overlay ─────────────────────────────────────────────
             if (_showAddSupplierOverlay) _buildAddSupplierOverlay(),
+
+            // ── Contextual Selection Toolbar ──
+            if (_selectedSupplierIds.isNotEmpty)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 56,
+                  decoration: const BoxDecoration(
+                    color: Colors.purple, // Purple matching the theme color gradient
+                    boxShadow: [
+                      BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                    ],
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () {
+                          setState(() {
+                            _selectedSupplierIds.clear();
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${_selectedSupplierIds.length} Selected',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.white),
+                        onPressed: () => _confirmDeleteSuppliers(context),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         );
       },
@@ -397,208 +432,145 @@ class _SupplierPageState extends State<SupplierPage> {
 
   // ── Supplier Card ──────────────────────────────────────────────────────────
   Widget _buildSupplierCard(SupplierData s) {
-    final isActive = s.status == 'ACTIVE';
+    final isSelected = _selectedSupplierIds.contains(s.id);
     final netDue = s.netDue;
 
-    return InkWell(
-      onTap: () async {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => SupplierDetailPage(
-              supplier: s,
-              onChanged: () {
-                CustomerSupplierService().notify();
-                setState(() {});
-              },
-            ),
-          ),
-        );
-        CustomerSupplierService().notify();
-        setState(() {});
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: Colors.grey[200]!),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
-            BoxShadow(
-                color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
-          ],
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isSelected ? Colors.green[50] : Colors.grey[100],
+        border: Border.all(
+          color: isSelected ? Colors.green[400]! : Colors.grey[300]!,
+          width: 1.5,
         ),
-        child: Row(
-          children: [
-            // Company Icon
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                border: Border.all(color: Colors.grey[300]!),
-                borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: () {
+          if (_selectedSupplierIds.isNotEmpty) {
+            setState(() {
+              if (isSelected) {
+                _selectedSupplierIds.remove(s.id);
+              } else {
+                _selectedSupplierIds.add(s.id);
+              }
+            });
+          } else {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => SupplierDetailPage(
+                  supplier: s,
+                  onChanged: () {
+                    CustomerSupplierService().notify();
+                    setState(() {});
+                  },
+                ),
               ),
-              child: const Icon(Icons.storefront,
-                  color: AppTheme.textDark, size: 26),
-            ),
-            const SizedBox(width: 12),
-
-            // Details Column
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          s.name,
-                          style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.textDark),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      // Status pill
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: isActive
-                              ? Colors.green[100]
-                              : Colors.red[100],
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          s.status,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: isActive
-                                ? Colors.green[800]
-                                : Colors.red[800],
-                          ),
-                        ),
+            );
+          }
+        },
+        onLongPress: () {
+          HapticFeedback.vibrate();
+          setState(() {
+            if (isSelected) {
+              _selectedSupplierIds.remove(s.id);
+            } else {
+              _selectedSupplierIds.add(s.id);
+            }
+          });
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              // Pic circle placeholder or checkmark
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.green[100] : Colors.grey[300],
+                  border: Border.all(
+                    color: isSelected ? Colors.green[300]! : Colors.grey[400]!,
+                  ),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: isSelected
+                    ? const Icon(Icons.check, color: Colors.green, size: 24)
+                    : const Icon(Icons.storefront, color: AppTheme.textDark, size: 24),
+              ),
+              const SizedBox(width: 16),
+              // Text details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      s.name,
+                      style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textDark),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      s.phone,
+                      style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                    ),
+                    if (s.gstin.isNotEmpty && s.gstin != 'N/A') ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'GSTIN: ${s.gstin}',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                       ),
                     ],
+                    const SizedBox(height: 2),
+                    StreamBuilder<List<BillData>>(
+                      stream: SupplierService().getBills(s.id),
+                      builder: (context, snapshot) {
+                        final count = snapshot.data?.length ?? 0;
+                        return Text(
+                          '$count bill${count == 1 ? '' : 's'}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[500], fontStyle: FontStyle.italic),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Due label
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    netDue != 0
+                        ? '₹ ${netDue.abs().toStringAsFixed(0)}'
+                        : '₹ 0',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: netDue > 0 ? Colors.red : Colors.green[800],
+                    ),
                   ),
-                  const SizedBox(height: 3),
-                  Text(s.phone,
-                      style: TextStyle(
-                          color: Colors.grey[600], fontSize: 12)),
-                  Text('GSTIN: ${s.gstin}',
-                      style: TextStyle(
-                          color: Colors.grey[500], fontSize: 11)),
-                  const SizedBox(height: 6),
-                  StreamBuilder<List<BillData>>(
-                    stream: SupplierService().getBills(s.id),
-                    builder: (context, snapshot) {
-                      final count = snapshot.data?.length ?? 0;
-                      return Text(
-                        '$count bill${count == 1 ? '' : 's'}',
-                        style: TextStyle(
-                            fontSize: 11, color: Colors.grey[500]),
-                      );
-                    },
+                  const SizedBox(height: 2),
+                  Text(
+                    netDue > 0
+                        ? 'You Pay'
+                        : netDue < 0
+                            ? 'Advance'
+                            : 'Settled',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: netDue > 0 ? Colors.brown[700] : Colors.grey,
+                    ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 8),
-
-            // Right: Actions
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.phone_outlined,
-                          color: Colors.grey[600], size: 20),
-                      onPressed: () {},
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: Icon(Icons.sms_outlined,
-                          color: Colors.grey[600], size: 20),
-                      onPressed: () {},
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Active', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                    const SizedBox(width: 4),
-                    SizedBox(
-                      height: 20,
-                      width: 36,
-                      child: FittedBox(
-                        fit: BoxFit.fill,
-                        child: Switch(
-                          value: s.isEnabled,
-                          activeThumbColor: AppTheme.primary,
-                          onChanged: (val) async {
-                            await SupplierService().updateSupplierStatus(s.id, val, val ? 'ACTIVE' : 'INACTIVE');
-                            CustomerSupplierService().notify();
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: netDue > 0
-                        ? Colors.red[50]
-                        : netDue < 0
-                            ? Colors.blue[50]
-                            : Colors.green[50],
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: netDue > 0
-                          ? Colors.red[200]!
-                          : netDue < 0
-                              ? Colors.blue[200]!
-                              : Colors.green[200]!,
-                    ),
-                  ),
-                  child: Text(
-                    netDue > 0
-                        ? '₹ ${netDue.toStringAsFixed(0)} Due'
-                        : netDue < 0
-                            ? '₹ ${(-netDue).toStringAsFixed(0)} Advance'
-                            : 'Settled',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: netDue > 0
-                          ? Colors.red[700]
-                          : netDue < 0
-                              ? Colors.blue[700]
-                              : Colors.green[700],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 4),
-            const Icon(Icons.chevron_right,
-                color: Colors.grey, size: 20),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -699,26 +671,6 @@ class _SupplierPageState extends State<SupplierPage> {
                             horizontal: 12, vertical: 12),
                       ),
                     ),
-                    const SizedBox(height: 12),
-
-                    // Initial Due
-                    const Text('Initial Due Amount (₹)',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 13)),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _addInitialDueController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        hintText: '0.00',
-                        prefixText: '₹ ',
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 12),
-                        helperText:
-                            'If you already owe them money, enter the amount',
-                      ),
-                    ),
                     const SizedBox(height: 20),
 
                     // Buttons
@@ -769,5 +721,57 @@ class _SupplierPageState extends State<SupplierPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDeleteSuppliers(BuildContext ctx) async {
+    final count = _selectedSupplierIds.length;
+    final confirmed = await showDialog<bool>(
+      context: ctx,
+      builder: (dCtx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.red),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'Delete $count ${count == 1 ? 'Supplier' : 'Suppliers'}?',
+                style: const TextStyle(fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete ${count == 1 ? 'this supplier' : 'these suppliers'}? '
+          'This will permanently delete all associated ledger transactions and bills.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('DELETE'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        final idsToDelete = List<String>.from(_selectedSupplierIds);
+        for (final id in idsToDelete) {
+          await SupplierService().deleteSupplier(id);
+        }
+        setState(() {
+          _selectedSupplierIds.clear();
+        });
+        CustomerSupplierService().notify();
+        _showSuccessSnackbar('Deleted supplier(s) successfully!');
+      } catch (e) {
+        _showErrorSnackbar('Failed to delete supplier(s): $e');
+      }
+    }
   }
 }

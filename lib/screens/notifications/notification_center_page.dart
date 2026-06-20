@@ -68,12 +68,17 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> with Si
         builder: (context, _) {
           final settings = CustomerSupplierService();
 
-          return TabBarView(
-            controller: _tabController,
-            children: [
-              _buildAlertsFeed(settings),
-              _buildSettingsView(settings),
-            ],
+          return Center(
+            child: SizedBox(
+              width: AppTheme.isWideScreen(context) ? 650.0 : double.infinity,
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildAlertsFeed(settings),
+                  _buildSettingsView(settings),
+                ],
+              ),
+            ),
           );
         },
       ),

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../core/core.dart';
 import '../../core/services/order_service.dart';
 import '../../core/services/product_service.dart';
-import '../../core/services/customer_supplier_service.dart';
 import '../../core/services/customer_service.dart';
 import '../../core/services/supplier_service.dart';
 import '../../core/models/customer.dart';
@@ -16,7 +15,6 @@ import '../supplier/supplier_page.dart';
 import '../inventory/inventory_page.dart';
 import '../customer/customer_page.dart';
 import '../staff/staff_page.dart';
-import '../notifications/notification_center_page.dart';
 import '../reports/invoice_history_page.dart';
 import '../../widgets/notification_bell.dart';
 
@@ -69,10 +67,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final isWide = AppTheme.isWideScreen(context);
     if (_currentIndex == 0) {
       return AppBar(
-        leadingWidth: 56,
-        leading: IconButton(
+        leadingWidth: isWide ? 0 : 56,
+        leading: isWide ? null : IconButton(
           icon: const Icon(Icons.menu, size: 26),
           tooltip: 'Menu',
           onPressed: () {
@@ -92,8 +91,8 @@ class _HomePageState extends State<HomePage> {
     } else if (_currentIndex == 1 || _currentIndex == 2) {
       // Unified Management Screen Header (Customer & Supplier)
       return AppBar(
-        leadingWidth: 56,
-        leading: IconButton(
+        leadingWidth: isWide ? 0 : 56,
+        leading: isWide ? null : IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 22),
           tooltip: 'Back to Home',
           onPressed: () => setState(() => _currentIndex = 0),
@@ -188,8 +187,8 @@ class _HomePageState extends State<HomePage> {
     } else if (_currentIndex == 3) {
       // Management Screen Header for Staff (No top toggle tabs)
       return AppBar(
-        leadingWidth: 56,
-        leading: IconButton(
+        leadingWidth: isWide ? 0 : 56,
+        leading: isWide ? null : IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 22),
           tooltip: 'Back to Home',
           onPressed: () => setState(() => _currentIndex = 0),
@@ -218,8 +217,8 @@ class _HomePageState extends State<HomePage> {
     } else {
       final titles = ['Home', 'Customer', 'Supplier', 'Staff'];
       return AppBar(
-        leadingWidth: 56,
-        leading: IconButton(
+        leadingWidth: isWide ? 0 : 56,
+        leading: isWide ? null : IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 22),
           tooltip: 'Back',
           onPressed: () => setState(() => _currentIndex = 0),
@@ -250,16 +249,85 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final isWide = AppTheme.isWideScreen(context);
+    
+    Widget bodyContent = _buildBody();
+    if (isWide) {
+      bodyContent = Row(
+        children: [
+          NavigationRail(
+            selectedIndex: _currentIndex,
+            onDestinationSelected: _onNavTapped,
+            labelType: NavigationRailLabelType.all,
+            backgroundColor: Colors.white,
+            selectedIconTheme: const IconThemeData(color: AppTheme.primary, size: 28),
+            unselectedIconTheme: const IconThemeData(color: AppTheme.textMid, size: 24),
+            selectedLabelTextStyle: const TextStyle(
+              color: AppTheme.primary,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+            unselectedLabelTextStyle: const TextStyle(
+              color: AppTheme.textMid,
+              fontSize: 11,
+            ),
+            leading: Column(
+              children: [
+                const SizedBox(height: 12),
+                Icon(Icons.storefront, color: Colors.orange[400], size: 32),
+                const SizedBox(height: 20),
+              ],
+            ),
+            destinations: const [
+              NavigationRailDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home),
+                label: Text('Home'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.person_outline),
+                selectedIcon: Icon(Icons.person),
+                label: Text('Customer'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.people_outline),
+                selectedIcon: Icon(Icons.people),
+                label: Text('Supplier'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.badge_outlined),
+                selectedIcon: Icon(Icons.badge),
+                label: Text('Staff'),
+              ),
+            ],
+          ),
+          const VerticalDivider(width: 1, thickness: 1, color: AppTheme.divider),
+          Expanded(child: _buildBody()),
+        ],
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: _buildAppBar(),
-      body: _buildBody(),
-      bottomNavigationBar: _HomeBottomNav(
-        currentIndex : _currentIndex,
-        items        : _navItems,
-        onTap        : _onNavTapped,
-        onFabPressed : _onFabPressed,
-      ),
+      body: bodyContent,
+      floatingActionButton: isWide
+          ? FloatingActionButton.extended(
+              onPressed: _onFabPressed,
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text('New Order'),
+            )
+          : null,
+      bottomNavigationBar: isWide
+          ? null
+          : _HomeBottomNav(
+              currentIndex : _currentIndex,
+              items        : _navItems,
+              onTap        : _onNavTapped,
+              onFabPressed : _onFabPressed,
+            ),
     );
   }
 }
@@ -296,27 +364,6 @@ class _HomeBodyState extends State<_HomeBody> {
     return date1.year == date2.year &&
         date1.month == date2.month &&
         date1.day == date2.day;
-  }
-
-  bool _isTransactionOnDay(String dateStr, DateTime targetDate) {
-    final cleanStr = dateStr.toLowerCase();
-    
-    // Format 1: 17 Jun 2026
-    final months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-    final monthName = months[targetDate.month - 1];
-    final format1 = '${targetDate.day} $monthName ${targetDate.year}';
-    if (cleanStr.contains(format1)) return true;
-    
-    // Format 2: 17-06-2026 or 17-6-2026
-    final dayStr = targetDate.day.toString();
-    final dayStrPadded = targetDate.day.toString().padLeft(2, '0');
-    final monthStr = targetDate.month.toString();
-    final monthStrPadded = targetDate.month.toString().padLeft(2, '0');
-    final format2a = '$dayStrPadded-$monthStrPadded-${targetDate.year}';
-    final format2b = '$dayStr-$monthStr-${targetDate.year}';
-    if (cleanStr.contains(format2a) || cleanStr.contains(format2b)) return true;
-    
-    return false;
   }
 
   String _getFormattedDateAndDay(DateTime date) {

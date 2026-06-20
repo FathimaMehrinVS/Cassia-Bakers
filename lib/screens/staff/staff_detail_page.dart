@@ -4,7 +4,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/core.dart';
 import '../../core/models/staff.dart';
 import '../../core/services/staff_service.dart';
-import 'staff_page.dart';
 import '../common/transaction_entry_page.dart';
 import '../common/transaction_detail_sheet.dart';
 
@@ -376,6 +375,7 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          const Divider(height: 1, thickness: 1, color: AppTheme.divider),
                           // Row 1: circular utility options bar
                           Container(
                             color: Colors.grey[200],
@@ -515,7 +515,12 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
                           // Row 4: Primary Action Received & Given Buttons
                           Container(
                             color: Colors.grey[50],
-                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                            padding: EdgeInsets.fromLTRB(
+                              16,
+                              10,
+                              16,
+                              16 + MediaQuery.paddingOf(context).bottom,
+                            ),
                             child: Row(
                               children: [
                                 // Paid Button (Left)

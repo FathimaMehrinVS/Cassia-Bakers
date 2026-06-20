@@ -394,6 +394,7 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      const Divider(height: 1, thickness: 1, color: AppTheme.divider),
                       // Row 1: circular utility options bar
                       Container(
                         color: Colors.grey[200],
@@ -531,7 +532,12 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
                       // Row 4: Primary Action Received & Given Buttons
                       Container(
                         color: Colors.grey[50],
-                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          10,
+                          16,
+                          16 + MediaQuery.paddingOf(context).bottom,
+                        ),
                         child: Row(
                           children: [
                             // Received Button (Left)

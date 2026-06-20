@@ -58,4 +58,15 @@ class StaffService {
       'balance': FieldValue.increment(delta),
     });
   }
+
+  // Delete staff member and their transactions
+  Future<void> deleteStaff(String staffId) async {
+    final txs = await _staff.doc(staffId).collection('transactions').get();
+    final batch = _db.batch();
+    for (final doc in txs.docs) {
+      batch.delete(doc.reference);
+    }
+    batch.delete(_staff.doc(staffId));
+    await batch.commit();
+  }
 }
